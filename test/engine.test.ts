@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  apply, cardPower, envidoAcceptedPoints, envidoDeclinedPoints, envidoPoints, faltaPoints, legalActions,
+  BET, CALL, ENVIDO_CALLS, REASON, apply, cardPower, envidoAcceptedPoints, envidoDeclinedPoints, envidoPoints, faltaPoints, legalActions,
   newDeck, newMatch, other, roundWinner, seededRng, shuffle, startRound, view,
 } from '../src/engine.ts'
 import type { EnvidoCall } from '../src/engine.ts'
@@ -138,32 +138,32 @@ const STRONG = [c(1, 'swords'), c(1, 'clubs'), c(4, 'cups')]
 const WEAK = [c(4, 'coins'), c(5, 'coins'), c(6, 'cups')]
 
 test('truco accepted: the round is worth 2 and the accepter holds the quiero', () => {
-  let s = run(setup(STRONG, WEAK), [[0, call('truco')]])
+  let s = run(setup(STRONG, WEAK), [[0, call(CALL.truco)]])
   assert.equal(s.turn, 1)
   assert.ok(has(legalActions(s, 1), ACCEPT))
   assert.ok(has(legalActions(s, 1), DECLINE))
-  assert.ok(has(legalActions(s, 1), call('retruco')))
+  assert.ok(has(legalActions(s, 1), call(CALL.retruco)))
   assert.ok(!has(legalActions(s, 1), play(WEAK[0])))
   s = run(s, [[1, ACCEPT]])
   assert.equal(s.trucoLevel, 1)
   assert.equal(s.raiseRights, 1)
   assert.equal(s.turn, 0)
-  assert.ok(!has(legalActions(s, 0), call('retruco')))
+  assert.ok(!has(legalActions(s, 0), call(CALL.retruco)))
   s = run(s, [[0, play(STRONG[0])]])
-  assert.ok(has(legalActions(s, 1), call('retruco')))
+  assert.ok(has(legalActions(s, 1), call(CALL.retruco)))
   s = run(s, [[1, play(WEAK[0])], [0, play(STRONG[1])], [1, play(WEAK[1])]])
   assert.equal(s.phase, 'roundOver')
   assert.deepEqual(s.score, [2, 0])
 })
 
 test('declining the truco gives the caller 1 and ends the round', () => {
-  const s = run(setup(STRONG, WEAK), [[0, call('truco')], [1, DECLINE]])
+  const s = run(setup(STRONG, WEAK), [[0, call(CALL.truco)], [1, DECLINE]])
   assert.deepEqual(s.score, [1, 0])
   assert.equal(s.phase, 'roundOver')
 })
 
 test('answering truco with retruco accepts the truco; declining the retruco pays 2', () => {
-  let s = run(setup(STRONG, WEAK), [[0, call('truco')], [1, call('retruco')]])
+  let s = run(setup(STRONG, WEAK), [[0, call(CALL.truco)], [1, call(CALL.retruco)]])
   assert.equal(s.trucoLevel, 1)
   assert.equal(s.turn, 0)
   s = run(s, [[0, DECLINE]])
@@ -171,17 +171,17 @@ test('answering truco with retruco accepts the truco; declining the retruco pays
 })
 
 test('after a direct raise only the one who accepted may raise again', () => {
-  let s = run(setup(STRONG, WEAK), [[0, call('truco')], [1, call('retruco')], [0, ACCEPT]])
+  let s = run(setup(STRONG, WEAK), [[0, call(CALL.truco)], [1, call(CALL.retruco)], [0, ACCEPT]])
   assert.equal(s.trucoLevel, 2)
   assert.equal(s.raiseRights, 0)
   assert.equal(s.turn, 0)
-  assert.ok(has(legalActions(s, 0), call('valeCuatro')))
+  assert.ok(has(legalActions(s, 0), call(CALL.valeCuatro)))
   s = run(s, [[0, play(STRONG[0])]])
   assert.ok(!legalActions(s, 1).some((a) => a.type === 'call'))
 })
 
 test('vale cuatro is the top bet', () => {
-  let s = run(setup(STRONG, WEAK), [[0, call('truco')], [1, call('retruco')], [0, call('valeCuatro')]])
+  let s = run(setup(STRONG, WEAK), [[0, call(CALL.truco)], [1, call(CALL.retruco)], [0, call(CALL.valeCuatro)]])
   assert.ok(!legalActions(s, 1).some((a) => a.type === 'call'))
   s = run(s, [[1, ACCEPT]])
   assert.equal(s.trucoLevel, 3)
@@ -189,41 +189,41 @@ test('vale cuatro is the top bet', () => {
 })
 
 test('folding while facing a retruco pays 2', () => {
-  const s = run(setup(STRONG, WEAK), [[0, call('truco')], [1, call('retruco')], [0, FOLD]])
+  const s = run(setup(STRONG, WEAK), [[0, call(CALL.truco)], [1, call(CALL.retruco)], [0, FOLD]])
   assert.deepEqual(s.score, [0, 2])
 })
 
 test('after answering, the turn goes back to whoever was about to play', () => {
-  const s = run(setup(STRONG, WEAK), [[0, play(STRONG[2])], [1, call('truco')], [0, ACCEPT]])
+  const s = run(setup(STRONG, WEAK), [[0, play(STRONG[2])], [1, call(CALL.truco)], [0, ACCEPT]])
   assert.equal(s.turn, 1)
   assert.equal(s.raiseRights, 0)
 })
 
 test('points stop at 30 and the match ends', () => {
   let s = setup(WEAK, STRONG, { score: [0, 28] })
-  s = run(s, [[0, call('truco')], [1, call('retruco')], [0, call('valeCuatro')], [1, ACCEPT]])
+  s = run(s, [[0, call(CALL.truco)], [1, call(CALL.retruco)], [0, call(CALL.valeCuatro)], [1, ACCEPT]])
   s = run(s, [[0, play(WEAK[0])], [1, play(STRONG[0])], [1, play(STRONG[1])], [0, play(WEAK[1])]])
   assert.deepEqual(s.score, [0, 30])
   assert.equal(s.phase, 'matchOver')
   assert.equal(s.winner, 1)
-  assert.deepEqual(s.log.at(-1), { type: 'score', player: 1, points: 2, reason: 'round' })
+  assert.deepEqual(s.log.at(-1), { type: 'score', player: 1, points: 2, reason: REASON.round })
   assert.deepEqual(legalActions(s, 0), [])
   assert.deepEqual(legalActions(s, 1), [])
 })
 
 test('envido points table (quiero / no quiero)', () => {
   const table: [EnvidoCall[], number | 'falta', number][] = [
-    [['envido'], 2, 1],
-    [['envido', 'envido'], 4, 2],
-    [['realEnvido'], 3, 1],
-    [['envido', 'realEnvido'], 5, 2],
-    [['envido', 'envido', 'realEnvido'], 7, 4],
-    [['faltaEnvido'], 'falta', 1],
-    [['envido', 'faltaEnvido'], 'falta', 2],
-    [['envido', 'envido', 'faltaEnvido'], 'falta', 4],
-    [['realEnvido', 'faltaEnvido'], 'falta', 3],
-    [['envido', 'realEnvido', 'faltaEnvido'], 'falta', 5],
-    [['envido', 'envido', 'realEnvido', 'faltaEnvido'], 'falta', 7],
+    [[CALL.envido], 2, 1],
+    [[CALL.envido, CALL.envido], 4, 2],
+    [[CALL.realEnvido], 3, 1],
+    [[CALL.envido, CALL.realEnvido], 5, 2],
+    [[CALL.envido, CALL.envido, CALL.realEnvido], 7, 4],
+    [[CALL.faltaEnvido], 'falta', 1],
+    [[CALL.envido, CALL.faltaEnvido], 'falta', 2],
+    [[CALL.envido, CALL.envido, CALL.faltaEnvido], 'falta', 4],
+    [[CALL.realEnvido, CALL.faltaEnvido], 'falta', 3],
+    [[CALL.envido, CALL.realEnvido, CALL.faltaEnvido], 'falta', 5],
+    [[CALL.envido, CALL.envido, CALL.realEnvido, CALL.faltaEnvido], 'falta', 7],
   ]
   for (const [calls, accepted, declined] of table) {
     const score: [number, number] = [20, 10]
@@ -245,14 +245,14 @@ const MANO_27 = [c(7, 'cups'), c(10, 'cups'), c(4, 'swords')]
 const PIE_27 = [c(7, 'coins'), c(12, 'coins'), c(3, 'clubs')]
 const PIE_33 = [c(6, 'swords'), c(7, 'swords'), c(4, 'cups')]
 const isEnvidoAction = (a: { type: string; call?: string }) =>
-  a.type === 'call' && ['envido', 'realEnvido', 'faltaEnvido'].includes(a.call!)
+  a.type === 'call' && (ENVIDO_CALLS as readonly string[]).includes(a.call!)
 
 test('envido accepted: the mano declares, the pie says son buenas, the mano wins ties', () => {
-  const s = run(setup(MANO_27, PIE_27), [[0, call('envido')], [1, ACCEPT]])
+  const s = run(setup(MANO_27, PIE_27), [[0, call(CALL.envido)], [1, ACCEPT]])
   assert.deepEqual(s.log.slice(2), [
     { type: 'envidoPoints', player: 0, points: 27 },
     { type: 'sonBuenas', player: 1 },
-    { type: 'score', player: 0, points: 2, reason: 'envido' },
+    { type: 'score', player: 0, points: 2, reason: REASON.envido },
   ])
   assert.deepEqual(s.score, [2, 0])
   assert.equal(s.turn, 0)
@@ -261,50 +261,50 @@ test('envido accepted: the mano declares, the pie says son buenas, the mano wins
 })
 
 test('a pie with better points declares them and wins', () => {
-  const s = run(setup(MANO_27, PIE_33), [[0, call('envido')], [1, call('realEnvido')], [0, ACCEPT]])
+  const s = run(setup(MANO_27, PIE_33), [[0, call(CALL.envido)], [1, call(CALL.realEnvido)], [0, ACCEPT]])
   assert.ok(s.log.some((e) => e.type === 'envidoPoints' && e.player === 1 && e.points === 33))
   assert.deepEqual(s.score, [0, 5])
   assert.equal(s.turn, 0)
 })
 
 test('declining an envido pays the caller', () => {
-  const s = run(setup(MANO_27, PIE_33), [[0, call('envido')], [1, call('envido')], [0, DECLINE]])
+  const s = run(setup(MANO_27, PIE_33), [[0, call(CALL.envido)], [1, call(CALL.envido)], [0, DECLINE]])
   assert.deepEqual(s.score, [0, 2])
   assert.equal(s.turn, 0)
 })
 
 test('envido escalation only goes up, with envido repeated at most once', () => {
-  let s = run(setup(MANO_27, PIE_27), [[0, call('envido')]])
-  assert.deepEqual(legalActions(s, 1).filter(isEnvidoAction), [call('envido'), call('realEnvido'), call('faltaEnvido')])
-  assert.ok(!has(legalActions(s, 1), call('truco')))
-  s = run(s, [[1, call('envido')]])
-  assert.deepEqual(legalActions(s, 0).filter(isEnvidoAction), [call('realEnvido'), call('faltaEnvido')])
-  s = run(s, [[0, call('realEnvido')]])
-  assert.deepEqual(legalActions(s, 1).filter(isEnvidoAction), [call('faltaEnvido')])
-  s = run(s, [[1, call('faltaEnvido')]])
+  let s = run(setup(MANO_27, PIE_27), [[0, call(CALL.envido)]])
+  assert.deepEqual(legalActions(s, 1).filter(isEnvidoAction), [call(CALL.envido), call(CALL.realEnvido), call(CALL.faltaEnvido)])
+  assert.ok(!has(legalActions(s, 1), call(CALL.truco)))
+  s = run(s, [[1, call(CALL.envido)]])
+  assert.deepEqual(legalActions(s, 0).filter(isEnvidoAction), [call(CALL.realEnvido), call(CALL.faltaEnvido)])
+  s = run(s, [[0, call(CALL.realEnvido)]])
+  assert.deepEqual(legalActions(s, 1).filter(isEnvidoAction), [call(CALL.faltaEnvido)])
+  s = run(s, [[1, call(CALL.faltaEnvido)]])
   assert.deepEqual(legalActions(s, 0), [ACCEPT, DECLINE, FOLD])
 })
 
 test('envido only in the first trick and before playing your card', () => {
   let s = setup(MANO_27, PIE_27)
-  assert.ok(has(legalActions(s, 0), call('envido')))
+  assert.ok(has(legalActions(s, 0), call(CALL.envido)))
   s = run(s, [[0, play(MANO_27[0])]])
-  assert.ok(has(legalActions(s, 1), call('envido')))
-  const afterTruco = run(s, [[1, call('truco')]])
+  assert.ok(has(legalActions(s, 1), call(CALL.envido)))
+  const afterTruco = run(s, [[1, call(CALL.truco)]])
   assert.ok(!legalActions(afterTruco, 0).some(isEnvidoAction))
   s = run(s, [[1, play(PIE_27[0])]])
   assert.ok(!legalActions(s, s.turn).some(isEnvidoAction))
 })
 
 test('el envido está primero: envido over a truco, then the truco is answered', () => {
-  let s = run(setup(MANO_27, PIE_33), [[0, call('truco')]])
-  assert.ok(has(legalActions(s, 1), call('envido')))
-  s = run(s, [[1, call('envido')]])
+  let s = run(setup(MANO_27, PIE_33), [[0, call(CALL.truco)]])
+  assert.ok(has(legalActions(s, 1), call(CALL.envido)))
+  s = run(s, [[1, call(CALL.envido)]])
   assert.equal(s.turn, 0)
   s = run(s, [[0, ACCEPT]])
   assert.deepEqual(s.score, [0, 2])
   assert.equal(s.turn, 1)
-  assert.equal(s.pending.at(-1)?.kind, 'truco')
+  assert.equal(s.pending.at(-1)?.kind, BET.truco)
   assert.ok(!legalActions(s, 1).some(isEnvidoAction))
   s = run(s, [[1, ACCEPT]])
   assert.equal(s.trucoLevel, 1)
@@ -312,25 +312,25 @@ test('el envido está primero: envido over a truco, then the truco is answered',
 })
 
 test('no envido once the truco is accepted', () => {
-  const s = run(setup(MANO_27, PIE_33), [[0, call('truco')], [1, ACCEPT]])
+  const s = run(setup(MANO_27, PIE_33), [[0, call(CALL.truco)], [1, ACCEPT]])
   assert.ok(!legalActions(s, 0).some(isEnvidoAction))
   assert.ok(!legalActions(run(s, [[0, play(MANO_27[0])]]), 1).some(isEnvidoAction))
 })
 
 test('folding while facing an envido pays the declined envido plus the round', () => {
-  const s = run(setup(MANO_27, PIE_33), [[0, call('envido')], [1, call('realEnvido')], [0, FOLD]])
+  const s = run(setup(MANO_27, PIE_33), [[0, call(CALL.envido)], [1, call(CALL.realEnvido)], [0, FOLD]])
   assert.deepEqual(s.score, [0, 3])
   assert.equal(s.phase, 'roundOver')
 })
 
 test('folding while an envido sits on a truco pays the envido plus 1', () => {
-  const s = run(setup(MANO_27, PIE_33), [[0, call('truco')], [1, call('envido')], [0, FOLD]])
+  const s = run(setup(MANO_27, PIE_33), [[0, call(CALL.truco)], [1, call(CALL.envido)], [0, FOLD]])
   assert.deepEqual(s.score, [0, 2])
 })
 
 test('an envido can end the match mid-round, even with a truco waiting', () => {
   const MANO_33 = [c(7, 'swords'), c(6, 'swords'), c(4, 'cups')]
-  const s = run(setup(MANO_33, PIE_27, { score: [28, 0] }), [[0, call('truco')], [1, call('envido')], [0, ACCEPT]])
+  const s = run(setup(MANO_33, PIE_27, { score: [28, 0] }), [[0, call(CALL.truco)], [1, call(CALL.envido)], [0, ACCEPT]])
   assert.deepEqual(s.score, [30, 0])
   assert.equal(s.phase, 'matchOver')
   assert.equal(s.winner, 0)
@@ -341,7 +341,7 @@ test('an envido can end the match mid-round, even with a truco waiting', () => {
 
 test('falta envido in malas wins the match', () => {
   const MANO_33 = [c(7, 'swords'), c(6, 'swords'), c(4, 'cups')]
-  const s = run(setup(MANO_33, PIE_27, { score: [10, 5] }), [[0, call('faltaEnvido')], [1, ACCEPT]])
+  const s = run(setup(MANO_33, PIE_27, { score: [10, 5] }), [[0, call(CALL.faltaEnvido)], [1, ACCEPT]])
   assert.deepEqual(s.score, [30, 5])
   assert.equal(s.phase, 'matchOver')
 })

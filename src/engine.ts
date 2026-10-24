@@ -58,9 +58,21 @@ export function envidoPoints(cards: Card[]): number {
   return best
 }
 
-export type EnvidoCall = 'envido' | 'realEnvido' | 'faltaEnvido'
-export type TrucoCall = 'truco' | 'retruco' | 'valeCuatro'
-export type Call = EnvidoCall | TrucoCall
+// Call names: use CALL.x instead of string literals
+export const CALL = {
+  envido: 'envido',
+  realEnvido: 'realEnvido',
+  faltaEnvido: 'faltaEnvido',
+  truco: 'truco',
+  retruco: 'retruco',
+  valeCuatro: 'valeCuatro',
+} as const
+export const ENVIDO_CALLS = [CALL.envido, CALL.realEnvido, CALL.faltaEnvido] as const // escalation order
+export const TRUCO_CALLS = [CALL.truco, CALL.retruco, CALL.valeCuatro] as const // index = level - 1
+
+export type Call = (typeof CALL)[keyof typeof CALL]
+export type EnvidoCall = (typeof ENVIDO_CALLS)[number]
+export type TrucoCall = (typeof TRUCO_CALLS)[number]
 
 export type Action =
   | { type: 'play'; card: Card }
@@ -77,10 +89,18 @@ export type GameEvent =
   | { type: 'fold'; player: Player }
   | { type: 'envidoPoints'; player: Player; points: number }
   | { type: 'sonBuenas'; player: Player }
-  | { type: 'score'; player: Player; points: number; reason: 'envido' | 'round' }
+  | { type: 'score'; player: Player; points: number; reason: Reason }
 
 export type Trick = { cards: [Card | null, Card | null]; winner: Player | 'tie' | null }
-export type Pending = { kind: 'envido' | 'truco'; caller: Player }
+
+// Why points were scored: the envido, or winning the round (worth the truco level)
+export const REASON = { envido: 'envido', round: 'round' } as const
+export type Reason = (typeof REASON)[keyof typeof REASON]
+
+// What a pending call is about
+export const BET = { envido: 'envido', truco: 'truco' } as const
+export type Bet = (typeof BET)[keyof typeof BET]
+export type Pending = { kind: Bet; caller: Player }
 
 export type State = {
   round: number // 1-based, within the match
@@ -144,12 +164,9 @@ export function startRound(state: State, rng: Rng): State {
   return deal(state.round + 1, [state.score[0], state.score[1]], other(state.firstPlayer), rng)
 }
 
-const TRUCO_CALLS: TrucoCall[] = ['truco', 'retruco', 'valeCuatro'] // index = level - 1
-
-const ENVIDO_CALLS: EnvidoCall[] = ['envido', 'realEnvido', 'faltaEnvido']
 const ENVIDO_VALUE: Record<EnvidoCall, number> = { envido: 2, realEnvido: 3, faltaEnvido: 0 } // falta depends on the score
 
-export const isEnvido = (c: Call): c is EnvidoCall => (ENVIDO_CALLS as Call[]).includes(c)
+export const isEnvido = (c: Call): c is EnvidoCall => (ENVIDO_CALLS as readonly Call[]).includes(c)
 
 export function legalActions(state: State, p: Player): Action[] {
   if (state.phase !== 'playing' || state.turn !== p) return []
@@ -157,7 +174,7 @@ export function legalActions(state: State, p: Player): Action[] {
   const top = state.pending.at(-1)
   if (top) {
     actions.push({ type: 'accept' }, { type: 'decline' })
-    if (top.kind === 'envido') {
+    if (top.kind === BET.envido) {
       for (const name of ENVIDO_CALLS) if (canRaiseEnvido(state.envidoCalls, name)) actions.push({ type: 'call', call: name })
     } else {
       if (state.trucoLevel + 1 < 3) actions.push({ type: 'call', call: TRUCO_CALLS[state.trucoLevel + 1] })
@@ -183,7 +200,7 @@ function canStartEnvido(s: State, p: Player): boolean {
 // Envido may be repeated once; otherwise each call must outrank the previous one
 function canRaiseEnvido(calls: EnvidoCall[], next: EnvidoCall): boolean {
   const last = calls[calls.length - 1]
-  if (next === 'envido') return calls.length === 1 && last === 'envido'
+  if (next === CALL.envido) return calls.length === 1 && last === CALL.envido
   return ENVIDO_CALLS.indexOf(next) > ENVIDO_CALLS.indexOf(last)
 }
 
@@ -193,7 +210,7 @@ export function faltaPoints(score: [number, number], winner: Player): number {
 }
 
 export function envidoAcceptedPoints(calls: EnvidoCall[], score: [number, number], winner: Player): number {
-  if (calls[calls.length - 1] === 'faltaEnvido') return faltaPoints(score, winner)
+  if (calls[calls.length - 1] === CALL.faltaEnvido) return faltaPoints(score, winner)
   return calls.reduce((sum, c) => sum + ENVIDO_VALUE[c], 0)
 }
 
@@ -230,13 +247,13 @@ function call(s: State, p: Player, c: Call) {
   if (!top) s.resumeTurn = p
   if (isEnvido(c)) {
     s.envidoCalls.push(c)
-    if (top?.kind === 'envido') top.caller = p
-    else s.pending.push({ kind: 'envido', caller: p }) // fresh, or on top of a truco
-  } else if (top?.kind === 'truco') {
+    if (top?.kind === BET.envido) top.caller = p
+    else s.pending.push({ kind: BET.envido, caller: p }) // fresh, or on top of a truco
+  } else if (top?.kind === BET.truco) {
     s.trucoLevel++ // raising accepts the bet on the table
     top.caller = p
   } else {
-    s.pending.push({ kind: 'truco', caller: p })
+    s.pending.push({ kind: BET.truco, caller: p })
   }
   s.turn = other(p)
 }
@@ -244,7 +261,7 @@ function call(s: State, p: Player, c: Call) {
 function accept(s: State, p: Player) {
   s.log.push({ type: 'accept', player: p })
   const top = s.pending.pop()!
-  if (top.kind === 'envido') {
+  if (top.kind === BET.envido) {
     resolveEnvido(s)
   } else {
     s.trucoLevel++
@@ -256,12 +273,12 @@ function accept(s: State, p: Player) {
 function decline(s: State, p: Player) {
   s.log.push({ type: 'decline', player: p })
   const top = s.pending.pop()!
-  if (top.kind === 'truco') {
+  if (top.kind === BET.truco) {
     endRound(s, top.caller)
     return
   }
   s.envidoDone = true
-  award(s, top.caller, envidoDeclinedPoints(s.envidoCalls), 'envido')
+  award(s, top.caller, envidoDeclinedPoints(s.envidoCalls), REASON.envido)
   resume(s)
 }
 
@@ -280,7 +297,7 @@ function resolveEnvido(s: State) {
   } else {
     s.log.push({ type: 'sonBuenas', player: pie })
   }
-  award(s, winner, envidoAcceptedPoints(s.envidoCalls, s.score, winner), 'envido')
+  award(s, winner, envidoAcceptedPoints(s.envidoCalls, s.score, winner), REASON.envido)
 }
 
 // After an answer: the next pending call is answered, or the interrupted play-turn resumes
@@ -328,7 +345,7 @@ export function roundWinner(results: (Player | 'tie')[], firstPlayer: Player): P
   return null
 }
 
-function award(s: State, p: Player, points: number, reason: 'envido' | 'round') {
+function award(s: State, p: Player, points: number, reason: Reason) {
   if (s.phase === 'matchOver') return
   const added = Math.min(WIN - s.score[p], points)
   s.score[p] += added
@@ -341,16 +358,16 @@ function award(s: State, p: Player, points: number, reason: 'envido' | 'round') 
 }
 
 function endRound(s: State, winner: Player) {
-  award(s, winner, s.trucoLevel + 1, 'round')
+  award(s, winner, s.trucoLevel + 1, REASON.round)
   s.pending = []
   if (s.phase === 'playing') s.phase = 'roundOver'
 }
 
 function fold(s: State, p: Player) {
   s.log.push({ type: 'fold', player: p })
-  if (s.pending.at(-1)?.kind === 'envido') {
+  if (s.pending.at(-1)?.kind === BET.envido) {
     s.envidoDone = true
-    award(s, other(p), envidoDeclinedPoints(s.envidoCalls), 'envido')
+    award(s, other(p), envidoDeclinedPoints(s.envidoCalls), REASON.envido)
   }
   endRound(s, other(p))
 }
