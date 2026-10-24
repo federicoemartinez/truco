@@ -2,6 +2,7 @@ import { apply, newMatch, startRound, view } from './engine.ts'
 import type { Player, State } from './engine.ts'
 import { chooseAction } from './ai.ts'
 import { mount, renderGame, showMenu } from './ui.ts'
+import * as portal from './portal.ts'
 
 const HUMAN: Player = 0
 const CPU: Player = 1
@@ -11,6 +12,7 @@ let cpuTimer: number | undefined
 
 function update() {
   renderGame(view(state, HUMAN))
+  if (state.phase === 'matchOver') portal.setPlaying(false)
   if (state.phase === 'playing' && state.turn === CPU) cpuTimer = window.setTimeout(cpuMove, 700 + Math.random() * 500)
 }
 
@@ -28,6 +30,7 @@ function cpuMove() {
 function startMatch() {
   clearTimeout(cpuTimer)
   state = newMatch(Math.random)
+  portal.setPlaying(true)
   update()
 }
 
@@ -41,10 +44,15 @@ mount(document.getElementById('app')!, {
     state = startRound(state, Math.random)
     update()
   },
-  onRematch: startMatch,
+  onRematch: async () => {
+    await portal.midgameAd()
+    startMatch()
+  },
   onMenu: () => {
     clearTimeout(cpuTimer)
+    portal.setPlaying(false)
     showMenu()
   },
 })
 showMenu()
+portal.init()
