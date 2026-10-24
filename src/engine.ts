@@ -144,9 +144,21 @@ export function startRound(state: State, rng: Rng): State {
   return deal(state.round + 1, [state.score[0], state.score[1]], other(state.firstPlayer), rng)
 }
 
+const TRUCO_CALLS: TrucoCall[] = ['truco', 'retruco', 'valeCuatro'] // index = level - 1
+
 export function legalActions(state: State, p: Player): Action[] {
   if (state.phase !== 'playing' || state.turn !== p) return []
-  const actions: Action[] = state.hands[p].map((card) => ({ type: 'play', card }))
+  const actions: Action[] = []
+  const top = state.pending.at(-1)
+  if (top) {
+    actions.push({ type: 'accept' }, { type: 'decline' })
+    if (state.trucoLevel + 1 < 3) actions.push({ type: 'call', call: TRUCO_CALLS[state.trucoLevel + 1] })
+  } else {
+    for (const card of state.hands[p]) actions.push({ type: 'play', card })
+    if (state.trucoLevel < 3 && (state.raiseRights === null || state.raiseRights === p)) {
+      actions.push({ type: 'call', call: TRUCO_CALLS[state.trucoLevel] })
+    }
+  }
   actions.push({ type: 'fold' })
   return actions
 }
@@ -165,9 +177,46 @@ export function apply(state: State, p: Player, action: Action): State {
   const s = structuredClone(state)
   switch (action.type) {
     case 'play': play(s, p, action.card); break
+    case 'call': call(s, p, action.call); break
+    case 'accept': accept(s, p); break
+    case 'decline': decline(s, p); break
     case 'fold': fold(s, p); break
   }
   return s
+}
+
+function call(s: State, p: Player, c: Call) {
+  s.log.push({ type: 'call', player: p, call: c })
+  const top = s.pending.at(-1)
+  if (!top) {
+    s.resumeTurn = p
+    s.pending.push({ kind: 'truco', caller: p })
+  } else {
+    s.trucoLevel++ // raising accepts the bet on the table
+    top.caller = p
+  }
+  s.turn = other(p)
+}
+
+function accept(s: State, p: Player) {
+  s.log.push({ type: 'accept', player: p })
+  s.pending.pop()
+  s.trucoLevel++
+  s.raiseRights = p
+  resume(s)
+}
+
+function decline(s: State, p: Player) {
+  s.log.push({ type: 'decline', player: p })
+  const top = s.pending.pop()!
+  endRound(s, top.caller)
+}
+
+// After an answer: the next pending call is answered, or the interrupted play-turn resumes
+function resume(s: State) {
+  if (s.phase !== 'playing') return
+  const top = s.pending.at(-1)
+  s.turn = top ? other(top.caller) : s.resumeTurn
 }
 
 function play(s: State, p: Player, card: Card) {

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { apply, cardPower, envidoPoints, newDeck, newMatch, roundWinner, seededRng, shuffle, startRound, view } from '../src/engine.ts'
-import { FOLD, c, play, run, setup } from './helpers.ts'
+import { apply, cardPower, envidoPoints, legalActions, newDeck, newMatch, roundWinner, seededRng, shuffle, startRound, view } from '../src/engine.ts'
+import { ACCEPT, DECLINE, FOLD, c, call, has, play, run, setup } from './helpers.ts'
 
 test('the deck has 40 distinct cards without 8s and 9s', () => {
   const deck = newDeck()
@@ -128,4 +128,81 @@ test('view shows only your own cards and your legal actions', () => {
   assert.equal(v.opponentHandSize, 3)
   assert.deepEqual(v.legal, [])
   assert.ok(!JSON.stringify(v).includes('{"rank":1,"suit":"swords"}'), 'the mano\'s 1 de espada leaked')
+})
+
+const STRONG = [c(1, 'swords'), c(1, 'clubs'), c(4, 'cups')]
+const WEAK = [c(4, 'coins'), c(5, 'coins'), c(6, 'cups')]
+
+test('truco accepted: the round is worth 2 and the accepter holds the quiero', () => {
+  let s = run(setup(STRONG, WEAK), [[0, call('truco')]])
+  assert.equal(s.turn, 1)
+  assert.ok(has(legalActions(s, 1), ACCEPT))
+  assert.ok(has(legalActions(s, 1), DECLINE))
+  assert.ok(has(legalActions(s, 1), call('retruco')))
+  assert.ok(!has(legalActions(s, 1), play(WEAK[0])))
+  s = run(s, [[1, ACCEPT]])
+  assert.equal(s.trucoLevel, 1)
+  assert.equal(s.raiseRights, 1)
+  assert.equal(s.turn, 0)
+  assert.ok(!has(legalActions(s, 0), call('retruco')))
+  s = run(s, [[0, play(STRONG[0])]])
+  assert.ok(has(legalActions(s, 1), call('retruco')))
+  s = run(s, [[1, play(WEAK[0])], [0, play(STRONG[1])], [1, play(WEAK[1])]])
+  assert.equal(s.phase, 'roundOver')
+  assert.deepEqual(s.score, [2, 0])
+})
+
+test('declining the truco gives the caller 1 and ends the round', () => {
+  const s = run(setup(STRONG, WEAK), [[0, call('truco')], [1, DECLINE]])
+  assert.deepEqual(s.score, [1, 0])
+  assert.equal(s.phase, 'roundOver')
+})
+
+test('answering truco with retruco accepts the truco; declining the retruco pays 2', () => {
+  let s = run(setup(STRONG, WEAK), [[0, call('truco')], [1, call('retruco')]])
+  assert.equal(s.trucoLevel, 1)
+  assert.equal(s.turn, 0)
+  s = run(s, [[0, DECLINE]])
+  assert.deepEqual(s.score, [0, 2])
+})
+
+test('after a direct raise only the one who accepted may raise again', () => {
+  let s = run(setup(STRONG, WEAK), [[0, call('truco')], [1, call('retruco')], [0, ACCEPT]])
+  assert.equal(s.trucoLevel, 2)
+  assert.equal(s.raiseRights, 0)
+  assert.equal(s.turn, 0)
+  assert.ok(has(legalActions(s, 0), call('valeCuatro')))
+  s = run(s, [[0, play(STRONG[0])]])
+  assert.ok(!legalActions(s, 1).some((a) => a.type === 'call'))
+})
+
+test('vale cuatro is the top bet', () => {
+  let s = run(setup(STRONG, WEAK), [[0, call('truco')], [1, call('retruco')], [0, call('valeCuatro')]])
+  assert.ok(!legalActions(s, 1).some((a) => a.type === 'call'))
+  s = run(s, [[1, ACCEPT]])
+  assert.equal(s.trucoLevel, 3)
+  assert.ok(!legalActions(s, 0).some((a) => a.type === 'call'))
+})
+
+test('folding while facing a retruco pays 2', () => {
+  const s = run(setup(STRONG, WEAK), [[0, call('truco')], [1, call('retruco')], [0, FOLD]])
+  assert.deepEqual(s.score, [0, 2])
+})
+
+test('after answering, the turn goes back to whoever was about to play', () => {
+  const s = run(setup(STRONG, WEAK), [[0, play(STRONG[2])], [1, call('truco')], [0, ACCEPT]])
+  assert.equal(s.turn, 1)
+  assert.equal(s.raiseRights, 0)
+})
+
+test('points stop at 30 and the match ends', () => {
+  let s = setup(WEAK, STRONG, { score: [0, 28] })
+  s = run(s, [[0, call('truco')], [1, call('retruco')], [0, call('valeCuatro')], [1, ACCEPT]])
+  s = run(s, [[0, play(WEAK[0])], [1, play(STRONG[0])], [1, play(STRONG[1])], [0, play(WEAK[1])]])
+  assert.deepEqual(s.score, [0, 30])
+  assert.equal(s.phase, 'matchOver')
+  assert.equal(s.winner, 1)
+  assert.deepEqual(s.log.at(-1), { type: 'score', player: 1, points: 2, reason: 'round' })
+  assert.deepEqual(legalActions(s, 0), [])
+  assert.deepEqual(legalActions(s, 1), [])
 })
