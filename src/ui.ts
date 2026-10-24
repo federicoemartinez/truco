@@ -22,6 +22,9 @@ export function mount(el: HTMLElement, h: Handlers) {
   root = el
   document.body.insertAdjacentHTML('afterbegin', SPRITE)
   root.addEventListener('click', (e) => {
+    // ponytail: time-based guard so a double tap can't hit whatever the new screen drew under the finger
+    // (next card, round panel, Revancha); per-render tokens if it ever swallows real taps
+    if (performance.now() - lastRender < 350) return
     const target = (e.target as Element).closest<HTMLElement>('[data-do]')
     switch (target?.dataset.do) {
       case 'start': return h.onStart()
@@ -30,8 +33,6 @@ export function mount(el: HTMLElement, h: Handlers) {
       case 'rematch': return h.onRematch()
       case 'menu': return h.onMenu()
       case 'act': {
-        // ponytail: time-based guard against a double tap landing on the freshly drawn table; per-render tokens if it misfires
-        if (performance.now() - lastRender < 250) return
         const action = current?.legal[Number(target!.dataset.i)]
         if (action) h.onAction(action)
       }
@@ -41,6 +42,7 @@ export function mount(el: HTMLElement, h: Handlers) {
 
 export function showMenu() {
   current = null
+  lastRender = performance.now()
   seen = { round: 0, plays: 0, bubbles: [null, null] }
   root.innerHTML = `
     <main class="menu">
