@@ -131,7 +131,8 @@ quien ganó la anterior, y tras una parda sale el mano. Gana la mano quien gane 
   Tabla completa (quiero / no quiero): E 2/1 · EE 4/2 · R 3/1 · ER 5/2 · EER 7/4 · F falta/1 ·
   EF falta/2 · EEF falta/4 · RF falta/3 · ERF falta/5 · EERF falta/7.
 - **Falta envido:** si el que va ganando está en las malas (< 15), vale el partido; si no, vale lo
-  que le falta al puntero para llegar a 30.
+  que le falta al puntero para llegar a 30. Con el marcador empatado, el puntero es cualquiera de
+  los dos (el valor es el mismo).
 - Declaración: el mano dice sus tantos; el otro los dice solo si gana, si no "son buenas". Empate:
   gana el mano. El motor siempre declara los tantos reales (no se puede mentir el tanto).
 
@@ -141,8 +142,10 @@ quien ganó la anterior, y tras una parda sale el mano. Gana la mano quien gane 
 - Solo sube quien tiene el quiero (`raiseRights`: quien aceptó la última apuesta). Se canta en tu
   turno, antes de jugar la carta.
 
-**Irse al mazo:** en tu turno; el rival suma lo que está en juego. Si estabas respondiendo un canto,
-cuenta como no quiero. No suma punto extra por envido no cantado.
+**Irse al mazo:** en tu turno; el rival suma el valor actual del truco (1 si no se cantó). Si
+estabas respondiendo un canto, ese canto cuenta como no quiero: ante un truco, el rival suma el valor
+del no quiero; ante un envido, suma los puntos del no quiero del envido más el valor actual del
+truco. No suma punto extra por envido no cantado.
 
 **Fin del partido:** el primero en llegar a 30; se chequea apenas se anotan puntos (un envido puede
 terminar el partido en mitad de una mano).
