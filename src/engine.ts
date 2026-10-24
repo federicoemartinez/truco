@@ -146,21 +146,60 @@ export function startRound(state: State, rng: Rng): State {
 
 const TRUCO_CALLS: TrucoCall[] = ['truco', 'retruco', 'valeCuatro'] // index = level - 1
 
+const ENVIDO_CALLS: EnvidoCall[] = ['envido', 'realEnvido', 'faltaEnvido']
+const ENVIDO_VALUE: Record<EnvidoCall, number> = { envido: 2, realEnvido: 3, faltaEnvido: 0 } // falta depends on the score
+
+export const isEnvido = (c: Call): c is EnvidoCall => (ENVIDO_CALLS as Call[]).includes(c)
+
 export function legalActions(state: State, p: Player): Action[] {
   if (state.phase !== 'playing' || state.turn !== p) return []
   const actions: Action[] = []
   const top = state.pending.at(-1)
   if (top) {
     actions.push({ type: 'accept' }, { type: 'decline' })
-    if (state.trucoLevel + 1 < 3) actions.push({ type: 'call', call: TRUCO_CALLS[state.trucoLevel + 1] })
+    if (top.kind === 'envido') {
+      for (const name of ENVIDO_CALLS) if (canRaiseEnvido(state.envidoCalls, name)) actions.push({ type: 'call', call: name })
+    } else {
+      if (state.trucoLevel + 1 < 3) actions.push({ type: 'call', call: TRUCO_CALLS[state.trucoLevel + 1] })
+      if (canStartEnvido(state, p)) for (const name of ENVIDO_CALLS) actions.push({ type: 'call', call: name })
+    }
   } else {
     for (const card of state.hands[p]) actions.push({ type: 'play', card })
+    if (canStartEnvido(state, p)) for (const name of ENVIDO_CALLS) actions.push({ type: 'call', call: name })
     if (state.trucoLevel < 3 && (state.raiseRights === null || state.raiseRights === p)) {
       actions.push({ type: 'call', call: TRUCO_CALLS[state.trucoLevel] })
     }
   }
   actions.push({ type: 'fold' })
   return actions
+}
+
+// First trick, before your card, nothing sung yet and no truco accepted ("el envido está primero")
+function canStartEnvido(s: State, p: Player): boolean {
+  return s.tricks.length === 1 && s.tricks[0].cards[p] === null &&
+    s.envidoCalls.length === 0 && !s.envidoDone && s.trucoLevel === 0
+}
+
+// Envido may be repeated once; otherwise each call must outrank the previous one
+function canRaiseEnvido(calls: EnvidoCall[], next: EnvidoCall): boolean {
+  const last = calls[calls.length - 1]
+  if (next === 'envido') return calls.length === 1 && last === 'envido'
+  return ENVIDO_CALLS.indexOf(next) > ENVIDO_CALLS.indexOf(last)
+}
+
+export function faltaPoints(score: [number, number], winner: Player): number {
+  const leader = Math.max(...score)
+  return leader < 15 ? WIN - score[winner] : WIN - leader
+}
+
+export function envidoAcceptedPoints(calls: EnvidoCall[], score: [number, number], winner: Player): number {
+  if (calls[calls.length - 1] === 'faltaEnvido') return faltaPoints(score, winner)
+  return calls.reduce((sum, c) => sum + ENVIDO_VALUE[c], 0)
+}
+
+// Everything but the last call, at least 1 (falta is always last)
+export function envidoDeclinedPoints(calls: EnvidoCall[]): number {
+  return Math.max(1, calls.slice(0, -1).reduce((sum, c) => sum + ENVIDO_VALUE[c], 0))
 }
 
 function sameAction(a: Action, b: Action): boolean {
@@ -188,28 +227,60 @@ export function apply(state: State, p: Player, action: Action): State {
 function call(s: State, p: Player, c: Call) {
   s.log.push({ type: 'call', player: p, call: c })
   const top = s.pending.at(-1)
-  if (!top) {
-    s.resumeTurn = p
-    s.pending.push({ kind: 'truco', caller: p })
-  } else {
+  if (!top) s.resumeTurn = p
+  if (isEnvido(c)) {
+    s.envidoCalls.push(c)
+    if (top?.kind === 'envido') top.caller = p
+    else s.pending.push({ kind: 'envido', caller: p }) // fresh, or on top of a truco
+  } else if (top?.kind === 'truco') {
     s.trucoLevel++ // raising accepts the bet on the table
     top.caller = p
+  } else {
+    s.pending.push({ kind: 'truco', caller: p })
   }
   s.turn = other(p)
 }
 
 function accept(s: State, p: Player) {
   s.log.push({ type: 'accept', player: p })
-  s.pending.pop()
-  s.trucoLevel++
-  s.raiseRights = p
+  const top = s.pending.pop()!
+  if (top.kind === 'envido') {
+    resolveEnvido(s)
+  } else {
+    s.trucoLevel++
+    s.raiseRights = p
+  }
   resume(s)
 }
 
 function decline(s: State, p: Player) {
   s.log.push({ type: 'decline', player: p })
   const top = s.pending.pop()!
-  endRound(s, top.caller)
+  if (top.kind === 'truco') {
+    endRound(s, top.caller)
+    return
+  }
+  s.envidoDone = true
+  award(s, top.caller, envidoDeclinedPoints(s.envidoCalls), 'envido')
+  resume(s)
+}
+
+// The mano says its points; the pie only says them if they win ("son buenas" otherwise)
+function resolveEnvido(s: State) {
+  s.envidoDone = true
+  const mano = s.firstPlayer
+  const pie = other(mano)
+  const manoPoints = envidoPoints(s.dealt[mano])
+  const piePoints = envidoPoints(s.dealt[pie])
+  s.log.push({ type: 'envidoPoints', player: mano, points: manoPoints })
+  let winner = mano
+  if (piePoints > manoPoints) {
+    s.log.push({ type: 'envidoPoints', player: pie, points: piePoints })
+    winner = pie
+  } else {
+    s.log.push({ type: 'sonBuenas', player: pie })
+  }
+  award(s, winner, envidoAcceptedPoints(s.envidoCalls, s.score, winner), 'envido')
 }
 
 // After an answer: the next pending call is answered, or the interrupted play-turn resumes
@@ -277,6 +348,10 @@ function endRound(s: State, winner: Player) {
 
 function fold(s: State, p: Player) {
   s.log.push({ type: 'fold', player: p })
+  if (s.pending.at(-1)?.kind === 'envido') {
+    s.envidoDone = true
+    award(s, other(p), envidoDeclinedPoints(s.envidoCalls), 'envido')
+  }
   endRound(s, other(p))
 }
 
