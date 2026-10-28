@@ -18,9 +18,10 @@ function winRate(rival: AiParams, reads: number): number {
     const rng = seededRng(seed)
     let s = newMatch(rng)
     nb = { ...nb, pending: [] }
-    while (s.phase !== 'matchOver') {
-      if (s.phase === 'roundOver') {
+    while (true) {
+      if (s.phase !== 'playing') {
         nb = learnFromRound(nb, view(s, 1), rng)
+        if (s.phase === 'matchOver') break
         s = startRound(s, rng)
         continue
       }
