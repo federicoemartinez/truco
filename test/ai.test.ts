@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { CALL, SUIT, apply, newMatch, seededRng, startRound, view } from '../src/engine.ts'
-import { DEFAULT_PARAMS, PROFILES, chooseAction } from '../src/ai.ts'
+import { DEFAULT_PARAMS, PRIOR_READ, PROFILES, chooseAction } from '../src/ai.ts'
 import { ACCEPT, DECLINE, FOLD, c, call, play, run, setup } from './helpers.ts'
 
 const WEAK = [c(4, SUIT.swords), c(5, SUIT.clubs), c(6, SUIT.cups)]
@@ -128,4 +128,24 @@ test('at 1-1, if its last card cannot win the round, the AI goes to the deck ins
     assert.deepEqual(chooseAction(view(losing, 1), DEFAULT_PARAMS, seededRng(seed)), FOLD)
     assert.deepEqual(chooseAction(view(tying, 1), DEFAULT_PARAMS, seededRng(seed)), play(c(3, SUIT.swords)))
   }
+})
+
+// Fresh deals where the human (mano) opens with a truco; how often the AI answers quiero or more
+function answersTruco(params: typeof DEFAULT_PARAMS, read: { trucoBluff: number; envidoBluff: number }): number {
+  let wants = 0
+  for (let seed = 1; seed <= 300; seed++) {
+    const dealt = newMatch(seededRng(seed))
+    const s = run({ ...dealt, firstPlayer: 0, turn: 0, resumeTurn: 0, envidoDone: true }, [[0, call(CALL.truco)]])
+    if (chooseAction(view(s, 1), params, seededRng(seed), read).type !== 'decline') wants++
+  }
+  return wants
+}
+
+test('the AI calls a liar more and an honest rival less, as much as it reads', () => {
+  const liar = { trucoBluff: 0.6, envidoBluff: 0.6 }
+  const honest = { trucoBluff: 0.02, envidoBluff: 0.02 }
+  const [lied, prior, straight] = [liar, PRIOR_READ, honest].map((read) => answersTruco(DEFAULT_PARAMS, read))
+  assert.ok(lied > prior + 15 && prior > straight + 10, `${lied} / ${prior} / ${straight} of 300`)
+  const blind = { ...DEFAULT_PARAMS, reads: 0 }
+  assert.equal(answersTruco(blind, liar), answersTruco(blind, honest))
 })

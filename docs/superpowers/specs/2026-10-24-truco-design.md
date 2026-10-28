@@ -152,7 +152,7 @@ terminar el partido en mitad de una mano).
 
 ## IA (`ai.ts`)
 
-`chooseAction(view, params, rng)`, con `params = { envidoBluff, trucoBluff, aggression, fish }`; cada rival
+`chooseAction(view, params, rng, read)`, con `params = { envidoBluff, trucoBluff, aggression, fish, slowplay, reads }`; cada rival
 (Aristóteles Medio, Ramón Mentirón, John Bonachón) es un juego de valores en `PROFILES`.
 
 - **Envido — cantar:** ≥ 30 → real envido o falta según el marcador; 27–29 → envido; menos →
@@ -170,6 +170,9 @@ terminar el partido en mitad de una mano).
   Con mano buena, con probabilidad `slowplay` se hace el muerto para que cante el rival y retrucar.
 - **Truco — responder:** quiero / no quiero / subir según las chances. **Regla dura:** si un no
   quiero le da el partido al rival, siempre acepta.
+- **Lectura del rival:** `chooseAction` recibe un `Read` (cuánto miente el rival en truco y envido,
+  ver `learn.ts`). Contra un mentiroso baja el umbral de quiero, contra uno honesto lo sube, en
+  proporción a `reads` (Aristóteles 1, Ramón 0.3, John 0: Bonachón no desconfía).
 - **Carta:** respondiendo, gana con la carta más baja que alcance; si no puede ganar, tira la más
   baja (o parda si conviene guardar una carta grande). Saliendo en 1ª, la del medio. Saliendo en
   2ª/3ª, la más alta si cierra la mano, si no la más baja.

@@ -6,22 +6,27 @@ import type { Action, Call, Card, Player, PlayerView, Rng } from './engine.ts'
 // envidoBluff: chance of singing envido without points; trucoBluff: chance per turn of a truco or raise
 // without the cards; aggression: lowers the bar to call and accept; fish: chance of hiding a good
 // envido as mano, to raise when the pie sings it; slowplay: chance of keeping quiet with a good hand
-// ("hacerse el muerto") so the rival sings truco and we raise
-export type AiParams = { envidoBluff: number; trucoBluff: number; aggression: number; fish: number; slowplay: number }
-export const DEFAULT_PARAMS: AiParams = { envidoBluff: 0.09, trucoBluff: 0.35, aggression: 0.5, fish: 0.4, slowplay: 0.1 }
+// ("hacerse el muerto") so the rival sings truco and we raise; reads: how much it trusts what it learned
+// about the rival (0 ignores it)
+export type AiParams = { envidoBluff: number; trucoBluff: number; aggression: number; fish: number; slowplay: number; reads: number }
+export const DEFAULT_PARAMS: AiParams = { envidoBluff: 0.09, trucoBluff: 0.35, aggression: 0.5, fish: 0.4, slowplay: 0.1, reads: 1 }
+
+// How often the rival lies, as far as the AI could tell (see learn.ts); before seeing anything, the prior
+export type Read = { trucoBluff: number; envidoBluff: number }
+export const PRIOR_READ: Read = { trucoBluff: 0.25, envidoBluff: 0.3 }
 
 // The rivals to pick from; names and mottos live in texts.ts
 export const PROFILES = {
   aristoteles: DEFAULT_PARAMS,
-  ramon: { envidoBluff: 0.35, trucoBluff: 1, aggression: 0.75, fish: 0.1, slowplay: 0.5 }, // lies a lot and wants everything
-  john: { envidoBluff: 0.01, trucoBluff: 0.1, aggression: 0.25, fish: 0, slowplay: 0.05 }, // if he sings envido, he has it
+  ramon: { envidoBluff: 0.35, trucoBluff: 1, aggression: 0.75, fish: 0.1, slowplay: 0.5, reads: 0.3 }, // lies a lot and wants everything
+  john: { envidoBluff: 0.01, trucoBluff: 0.1, aggression: 0.25, fish: 0, slowplay: 0.05, reads: 0 }, // if he sings envido, he has it
 } satisfies Record<string, AiParams>
 export type Rival = keyof typeof PROFILES
 
-export function chooseAction(v: PlayerView, params: AiParams = DEFAULT_PARAMS, rng: Rng = Math.random): Action {
+export function chooseAction(v: PlayerView, params: AiParams = DEFAULT_PARAMS, rng: Rng = Math.random, read: Read = PRIOR_READ): Action {
   const top = v.pending.at(-1)
-  if (top?.kind === BET.envido) return respondEnvido(v, params, rng)
-  if (top?.kind === BET.truco) return respondTruco(v, params, rng)
+  if (top?.kind === BET.envido) return respondEnvido(v, params, rng, read)
+  if (top?.kind === BET.truco) return respondTruco(v, params, rng, read)
   return callEnvido(v, params, rng, true) ?? callTruco(v, params, rng) ?? chooseCard(v)
 }
 
@@ -46,7 +51,7 @@ function callEnvido(v: PlayerView, params: AiParams, rng: Rng, mayFish: boolean)
   return undefined
 }
 
-function respondEnvido(v: PlayerView, params: AiParams, rng: Rng): Action {
+function respondEnvido(v: PlayerView, params: AiParams, rng: Rng, read: Read): Action {
   const points = envidoPoints(v.dealt)
   const opp = other(v.me)
   const calls = v.envidoCalls
@@ -57,7 +62,11 @@ function respondEnvido(v: PlayerView, params: AiParams, rng: Rng): Action {
   const declineLosesMatch = v.score[opp] + envidoDeclinedPoints(calls) >= 30
   const isFalta = calls[calls.length - 1] === CALL.faltaEnvido
   const faltaCostsMatch = v.score[opp] + faltaPoints(v.score, opp) >= 30
-  const threshold = isFalta ? (faltaCostsMatch ? 30 : 28) : 26 + 2 * (calls.length - 1) - Math.round(4 * (params.aggression - 0.5))
+  // A rival who lies a lot gets called more; one who never lies, less
+  const distrust = Math.round(6 * params.reads * (read.envidoBluff - PRIOR_READ.envidoBluff))
+  const threshold = isFalta
+    ? (faltaCostsMatch ? 30 : 28)
+    : 26 + 2 * (calls.length - 1) - Math.round(4 * (params.aggression - 0.5)) - distrust
   const manoBonus = v.firstPlayer === v.me ? 1 : 0 // the mano wins ties
   if (declineLosesMatch || points >= threshold - manoBonus) return find(v, 'accept')!
   return find(v, 'decline')!
@@ -75,14 +84,15 @@ function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefine
   return bluffs(v, params, rng) ? raise : undefined
 }
 
-function respondTruco(v: PlayerView, params: AiParams, rng: Rng): Action {
+function respondTruco(v: PlayerView, params: AiParams, rng: Rng, read: Read): Action {
   const envido = callEnvido(v, params, rng, false) // el envido está primero
   if (envido) return envido
   const chance = winChance(v, rng)
   const raise = trucoCall(v)
   if (raise && (chance >= 0.85 - 0.2 * params.aggression || bluffs(v, params, rng))) return raise
   const declineLosesMatch = v.score[other(v.me)] + v.trucoLevel + 1 >= 30
-  if (declineLosesMatch || chance >= 0.5 - 0.2 * params.aggression) return find(v, 'accept')!
+  const distrust = params.reads * (read.trucoBluff - PRIOR_READ.trucoBluff) // see respondEnvido
+  if (declineLosesMatch || chance >= 0.5 - 0.2 * params.aggression - 0.4 * distrust) return find(v, 'accept')!
   return find(v, 'decline')!
 }
 
