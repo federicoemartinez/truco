@@ -7,9 +7,9 @@ import type { Action, Call, Card, Player, PlayerView, Rng } from './engine.ts'
 // without the cards; aggression: lowers the bar to call and accept; fish: chance of hiding a good
 // envido as mano, to raise when the pie sings it; slowplay: chance of keeping quiet with a good hand
 // ("hacerse el muerto") so the rival sings truco and we raise; reads: how much it trusts what it learned
-// about the rival (0 ignores it)
+// about the rival (0 ignores it; only Bruno reads)
 export type AiParams = { envidoBluff: number; trucoBluff: number; aggression: number; fish: number; slowplay: number; reads: number }
-export const DEFAULT_PARAMS: AiParams = { envidoBluff: 0.09, trucoBluff: 0.35, aggression: 0.5, fish: 0.4, slowplay: 0.1, reads: 1 }
+export const DEFAULT_PARAMS: AiParams = { envidoBluff: 0.09, trucoBluff: 0.35, aggression: 0.5, fish: 0.4, slowplay: 0.1, reads: 0 }
 
 // How often the rival lies, as far as the AI could tell (see learn.ts); before seeing anything, the prior
 export type Read = { trucoBluff: number; envidoBluff: number }
@@ -18,8 +18,9 @@ export const PRIOR_READ: Read = { trucoBluff: 0.25, envidoBluff: 0.3 }
 // The rivals to pick from; names and mottos live in texts.ts
 export const PROFILES = {
   aristoteles: DEFAULT_PARAMS,
-  ramon: { envidoBluff: 0.35, trucoBluff: 1, aggression: 0.75, fish: 0.1, slowplay: 0.5, reads: 0.3 }, // lies a lot and wants everything
+  ramon: { envidoBluff: 0.35, trucoBluff: 1, aggression: 0.75, fish: 0.1, slowplay: 0.5, reads: 0 }, // lies a lot and wants everything
   john: { envidoBluff: 0.01, trucoBluff: 0.1, aggression: 0.25, fish: 0, slowplay: 0.05, reads: 0 }, // if he sings envido, he has it
+  bruno: { ...DEFAULT_PARAMS, reads: 1 }, // Aristóteles who learns how much you lie
 } satisfies Record<string, AiParams>
 export type Rival = keyof typeof PROFILES
 

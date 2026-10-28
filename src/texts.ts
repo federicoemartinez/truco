@@ -22,6 +22,7 @@ export const RIVALS: Record<Rival, { name: string; motto: string }> = {
   aristoteles: { name: 'Aristóteles Medio', motto: 'Ni mucho ni poco' },
   ramon: { name: 'Ramón Mentirón', motto: 'Miente como respira' },
   john: { name: 'John Bonachón', motto: 'Si canta, es porque tiene' },
+  bruno: { name: 'Bruno Aprendiz', motto: 'Te va tomando el tiempo' },
 }
 
 const SUIT_NAME: Record<Suit, string> = { swords: 'espada', clubs: 'basto', coins: 'oro', cups: 'copa' }

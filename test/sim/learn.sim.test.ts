@@ -8,10 +8,9 @@ import { learnFromRound, newNotebook, noteCall, readOf } from '../../src/learn.t
 
 const MATCHES = Number(process.env.LEARN_MATCHES ?? 600)
 
-// Aristóteles (player 1) against a rival (player 0) over many matches, keeping what it learned from one
-// match to the next like main.ts does. Share of matches won, after a first fifth spent learning
-function winRate(rival: AiParams, reads: number): number {
-  const me = { ...PROFILES.aristoteles, reads }
+// One of our rivals (player 1) against an opponent (player 0) over many matches, keeping what it learned
+// from one match to the next like main.ts does. Share of matches won, after a first fifth spent learning
+function winRate(me: AiParams, rival: AiParams): number {
   let nb = newNotebook()
   let won = 0
   for (let seed = 1; seed <= MATCHES; seed++) {
@@ -35,10 +34,10 @@ function winRate(rival: AiParams, reads: number): number {
   return won / (MATCHES - MATCHES / 5)
 }
 
-test('reading the rival wins Aristóteles at least 5 more matches in 100, against a liar and an honest one', () => {
+test('Bruno, who reads, wins at least 5 more matches in 100 than Aristóteles, against a liar and an honest one', () => {
   for (const name of ['ramon', 'john'] as const) {
-    const reading = winRate(PROFILES[name], 1)
-    const blind = winRate(PROFILES[name], 0)
+    const reading = winRate(PROFILES.bruno, PROFILES[name])
+    const blind = winRate(PROFILES.aristoteles, PROFILES[name])
     console.log(name, { reading, blind })
     assert.ok(reading - blind >= 0.05, `against ${name}: ${reading.toFixed(3)} reading vs ${blind.toFixed(3)} blind`)
   }

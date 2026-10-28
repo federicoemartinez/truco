@@ -141,12 +141,12 @@ function answersTruco(params: typeof DEFAULT_PARAMS, read: { trucoBluff: number;
   return wants
 }
 
-test('the AI calls a liar more and an honest rival less, as much as it reads', () => {
+test('Bruno calls a liar more and an honest rival less; Aristóteles doesn\'t read', () => {
   const liar = { trucoBluff: 0.6, envidoBluff: 0.6 }
   const honest = { trucoBluff: 0.02, envidoBluff: 0.02 }
-  const [lied, prior, straight] = [liar, PRIOR_READ, honest].map((read) => answersTruco(DEFAULT_PARAMS, read))
+  const [lied, prior, straight] = [liar, PRIOR_READ, honest].map((read) => answersTruco(PROFILES.bruno, read))
   assert.ok(lied > prior + 15 && prior > straight + 10, `${lied} / ${prior} / ${straight} of 300`)
-  const blind = { ...DEFAULT_PARAMS, reads: 0 }
+  const blind = PROFILES.aristoteles // Bruno without the reading
   assert.equal(answersTruco(blind, liar), answersTruco(blind, honest))
 })
 
@@ -161,11 +161,11 @@ function answersEnvido(params: typeof DEFAULT_PARAMS, read: { trucoBluff: number
   return wants
 }
 
-test('the AI accepts a liar\'s envido more and an honest rival\'s less, as much as it reads', () => {
+test('Bruno accepts a liar\'s envido more and an honest rival\'s less; Aristóteles doesn\'t read', () => {
   const liar = { trucoBluff: 0.6, envidoBluff: 0.6 }
   const honest = { trucoBluff: 0.02, envidoBluff: 0.02 }
-  const [lied, prior, straight] = [liar, PRIOR_READ, honest].map((read) => answersEnvido(DEFAULT_PARAMS, read))
+  const [lied, prior, straight] = [liar, PRIOR_READ, honest].map((read) => answersEnvido(PROFILES.bruno, read))
   assert.ok(lied > prior + 20 && prior > straight + 30, `${lied} / ${prior} / ${straight} of 300`)
-  const blind = { ...DEFAULT_PARAMS, reads: 0 }
+  const blind = PROFILES.aristoteles // Bruno without the reading
   assert.equal(answersEnvido(blind, liar), answersEnvido(blind, honest))
 })
