@@ -27,7 +27,12 @@ function load(): string | null {
 }
 
 function learn() {
-  notebook = learnFromRound(notebook, view(state, CPU), Math.random)
+  try {
+    notebook = learnFromRound(notebook, view(state, CPU), Math.random)
+  } catch (err) {
+    console.error(err) // never leave the round-over screen stuck on a learning bug
+    return
+  }
   try {
     localStorage.setItem(NOTEBOOK_KEY, toSaved(notebook))
   } catch {
