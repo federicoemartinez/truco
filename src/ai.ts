@@ -1,5 +1,7 @@
-import { BET, CALL, cardPower, envidoDeclinedPoints, envidoPoints, faltaPoints, isEnvido, other } from './engine.ts'
-import type { Action, Call, Card, PlayerView, Rng } from './engine.ts'
+import {
+  BET, CALL, cardPower, envidoDeclinedPoints, envidoPoints, faltaPoints, isEnvido, newDeck, other, roundWinner, sameCard, shuffle, trickWinner,
+} from './engine.ts'
+import type { Action, Call, Card, Player, PlayerView, Rng } from './engine.ts'
 
 // bluff: chance of calling with a bad hand; aggression: lowers the bar to call and accept truco
 export type AiParams = { bluff: number; aggression: number }
@@ -49,36 +51,83 @@ function respondEnvido(v: PlayerView): Action {
 function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefined {
   const raise = trucoCall(v)
   if (!raise) return undefined
-  if (handStrength(v) >= 0.7 - 0.2 * params.aggression || rng() < params.bluff) return raise
+  // Hardly anyone sings truco before playing a card: even with a sure hand it pays to wait for the first
+  // trick, so only now and then, and never as a bluff
+  if (v.tricks.length === 1 && v.tricks[0].cards[v.me] === null) {
+    return rng() < 0.25 && winChance(v, rng) >= 0.9 - 0.2 * params.aggression ? raise : undefined
+  }
+  if (winChance(v, rng) >= 0.7 - 0.2 * params.aggression || rng() < params.bluff / 3) return raise
   return undefined
 }
 
 function respondTruco(v: PlayerView, params: AiParams, rng: Rng): Action {
   const envido = callEnvido(v, params, rng, false) // el envido está primero
   if (envido) return envido
-  const strength = handStrength(v)
+  const chance = winChance(v, rng)
   const raise = trucoCall(v)
-  if (raise && (strength >= 0.85 - 0.2 * params.aggression || rng() < params.bluff / 2)) return raise
+  if (raise && (chance >= 0.85 - 0.2 * params.aggression || rng() < params.bluff / 3)) return raise
   const declineLosesMatch = v.score[other(v.me)] + v.trucoLevel + 1 >= 30
-  if (declineLosesMatch || strength >= 0.55 - 0.2 * params.aggression) return find(v, 'accept')!
+  if (declineLosesMatch || chance >= 0.5 - 0.2 * params.aggression) return find(v, 'accept')!
   return find(v, 'decline')!
 }
 
-// 0..1 estimate of taking the round, from the cards still ours and how the tricks went
-function handStrength(v: PlayerView): number {
+const SAMPLES = 60
+
+// Chance of taking the round: deal the opponent every hand that fits the cards they showed and the envido
+// they declared, and play each one out with both hands face up
+function winChance(v: PlayerView, rng: Rng): number {
   const opp = other(v.me)
-  const current = v.tricks[v.tricks.length - 1]
-  const onTable = current.cards[v.me]
-  const powers = [...v.hand, ...(onTable ? [onTable] : [])].map(cardPower).sort((a, b) => b - a)
-  if (powers.length === 0) return 0
-  const best = powers[0] / 14
-  const avg = powers.reduce((a, b) => a + b, 0) / powers.length / 14
-  let strength = 0.6 * best + 0.4 * avg
-  const done = v.tricks.filter((t) => t.winner !== null)
-  strength += 0.25 * (done.filter((t) => t.winner === v.me).length - done.filter((t) => t.winner === opp).length)
-  const oppCard = current.cards[opp]
-  if (oppCard && !onTable) strength += powers[0] > cardPower(oppCard) ? 0.1 : -0.2
-  return Math.min(1, Math.max(0, strength))
+  const shown = v.tricks.flatMap((t) => t.cards[opp] ?? [])
+  const pool = newDeck().filter((card) => ![...v.dealt, ...shown].some((seen) => sameCard(seen, card)))
+  let declared: number | undefined
+  let sonBuenas = false
+  for (const e of v.log) {
+    if (e.player !== opp) continue
+    if (e.type === 'envidoPoints') declared = e.points
+    if (e.type === 'sonBuenas') sonBuenas = true // the pie concedes: no more than our points
+  }
+  const mine = envidoPoints(v.dealt)
+  const fits = (hand: Card[]) => {
+    const points = envidoPoints([...shown, ...hand])
+    return declared !== undefined ? points === declared : !sonBuenas || points <= mine
+  }
+  const results = v.tricks.slice(0, -1).map((t) => t.winner as Player | 'tie')
+  const table = v.tricks[v.tricks.length - 1].cards
+  const turn = v.pending.length ? v.resumeTurn : v.turn // whose card is next
+  let wins = 0
+  let n = 0
+  // ponytail: rejection sampling; a rare declared envido may yield few samples, enumerate the hands if that shows
+  for (let tries = 0; n < SAMPLES && tries < SAMPLES * 50; tries++) {
+    const hand = shuffle(pool, rng).slice(0, v.opponentHandSize)
+    if (!fits(hand)) continue
+    n++
+    const hands: [Card[], Card[]] = [[], []]
+    hands[v.me] = v.hand
+    hands[opp] = hand
+    if (playout(hands, results, table, turn, v.firstPlayer) === v.me) wins++
+  }
+  return n ? wins / n : 0.5
+}
+
+// Who takes the round when both play their best seeing every card (minimax over at most 3 cards each)
+function playout(hands: [Card[], Card[]], results: (Player | 'tie')[], table: [Card | null, Card | null], turn: Player, first: Player): Player {
+  const decided = roundWinner(results, first)
+  if (decided !== null) return decided
+  for (const card of hands[turn]) {
+    const rest: [Card[], Card[]] = [hands[0], hands[1]]
+    rest[turn] = hands[turn].filter((h) => h !== card)
+    const t: [Card | null, Card | null] = [table[0], table[1]]
+    t[turn] = card
+    let winner: Player
+    if (t[0] && t[1]) {
+      const won = trickWinner(t[0], t[1])
+      winner = playout(rest, [...results, won], [null, null], won === 'tie' ? first : won, first)
+    } else {
+      winner = playout(rest, results, t, other(turn), first)
+    }
+    if (winner === turn) return turn
+  }
+  return other(turn)
 }
 
 function chooseCard(v: PlayerView): Action {
