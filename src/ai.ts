@@ -3,13 +3,14 @@ import {
 } from './engine.ts'
 import type { Action, Call, Card, Player, PlayerView, Rng } from './engine.ts'
 
-// bluff: chance of calling with a bad hand; aggression: lowers the bar to call and accept truco
-export type AiParams = { bluff: number; aggression: number }
-export const DEFAULT_PARAMS: AiParams = { bluff: 0.15, aggression: 0.5 }
+// bluff: chance of lying with a bad hand; aggression: lowers the bar to call and accept;
+// fish: chance of hiding a good envido as mano, to raise when the pie sings it
+export type AiParams = { bluff: number; aggression: number; fish: number }
+export const DEFAULT_PARAMS: AiParams = { bluff: 0.15, aggression: 0.5, fish: 0.4 }
 
 export function chooseAction(v: PlayerView, params: AiParams = DEFAULT_PARAMS, rng: Rng = Math.random): Action {
   const top = v.pending.at(-1)
-  if (top?.kind === BET.envido) return respondEnvido(v)
+  if (top?.kind === BET.envido) return respondEnvido(v, params, rng)
   if (top?.kind === BET.truco) return respondTruco(v, params, rng)
   return callEnvido(v, params, rng, true) ?? callTruco(v, params, rng) ?? chooseCard(v)
 }
@@ -20,29 +21,33 @@ function find(v: PlayerView, type: Action['type'], name?: Call): Action | undefi
 
 const trucoCall = (v: PlayerView) => v.legal.find((a) => a.type === 'call' && !isEnvido(a.call))
 
-function callEnvido(v: PlayerView, params: AiParams, rng: Rng, maySandbag: boolean): Action | undefined {
+function callEnvido(v: PlayerView, params: AiParams, rng: Rng, mayFish: boolean): Action | undefined {
   if (!find(v, 'call', CALL.envido)) return undefined
   const points = envidoPoints(v.dealt)
   const behind = v.score[other(v.me)] - v.score[v.me]
-  // As mano with a great envido, sometimes stay quiet so the opponent calls and we raise
-  if (maySandbag && points >= 31 && v.firstPlayer === v.me && rng() < 0.3) return undefined
+  const mano = v.firstPlayer === v.me
+  // Salir a la pesca: as mano with a good envido, stay quiet so the pie sings it and we raise
+  if (mayFish && mano && points >= 28 && rng() < params.fish) return undefined
   if (points >= 30) return find(v, 'call', points >= 32 || behind >= 10 ? CALL.faltaEnvido : CALL.realEnvido)
-  if (points >= 27 || rng() < params.bluff) return find(v, 'call', CALL.envido)
+  if (points >= 27) return find(v, 'call', CALL.envido)
+  // A mano who played without singing is likely short of points: the best moment to lie
+  const manoPassed = !mano && v.tricks[0].cards[other(v.me)] !== null
+  if (rng() < params.bluff * (manoPassed ? 2 : 1)) return find(v, 'call', CALL.envido)
   return undefined
 }
 
-function respondEnvido(v: PlayerView): Action {
+function respondEnvido(v: PlayerView, params: AiParams, rng: Rng): Action {
   const points = envidoPoints(v.dealt)
   const opp = other(v.me)
   const calls = v.envidoCalls
-  if (points >= 31) {
+  if (points >= 30 || rng() < params.bluff / 3) {
     const raise = find(v, 'call', CALL.realEnvido) ?? (points >= 32 ? find(v, 'call', CALL.faltaEnvido) : undefined)
     if (raise) return raise
   }
   const declineLosesMatch = v.score[opp] + envidoDeclinedPoints(calls) >= 30
   const isFalta = calls[calls.length - 1] === CALL.faltaEnvido
   const faltaCostsMatch = v.score[opp] + faltaPoints(v.score, opp) >= 30
-  const threshold = isFalta ? (faltaCostsMatch ? 30 : 28) : 26 + 2 * (calls.length - 1)
+  const threshold = isFalta ? (faltaCostsMatch ? 30 : 28) : 26 + 2 * (calls.length - 1) - Math.round(4 * (params.aggression - 0.5))
   const manoBonus = v.firstPlayer === v.me ? 1 : 0 // the mano wins ties
   if (declineLosesMatch || points >= threshold - manoBonus) return find(v, 'accept')!
   return find(v, 'decline')!

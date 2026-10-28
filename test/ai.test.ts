@@ -69,3 +69,22 @@ test('the AI reads the last card from the envido the human declared', () => {
     assert.deepEqual(chooseAction(view(s, 1), DEFAULT_PARAMS, seededRng(seed)), call(CALL.truco))
   }
 })
+
+test('as mano with 33 the AI sometimes keeps quiet to fish, and raises when the pie sings', () => {
+  const s = setup(WEAK, [c(7, SUIT.swords), c(6, SUIT.swords), c(4, SUIT.cups)], { firstPlayer: 1, turn: 1, resumeTurn: 1 })
+  const quiet = Array.from({ length: 200 }, (_, seed) => chooseAction(view(s, 1), DEFAULT_PARAMS, seededRng(seed))).filter((a) => a.type === 'play').length
+  assert.ok(quiet > 40 && quiet < 120, `kept quiet ${quiet} of 200`)
+  const fished = run(s, [[1, play(c(4, SUIT.cups))], [0, call(CALL.envido)]])
+  for (let seed = 1; seed <= 50; seed++) {
+    const a = chooseAction(view(fished, 1), DEFAULT_PARAMS, seededRng(seed))
+    assert.ok(a.type === 'call', JSON.stringify(a))
+  }
+})
+
+test('the AI lies about the envido more after the mano played without singing', () => {
+  const always = (x: number) => () => x // between bluff and twice the bluff
+  const asMano = setup(WEAK, [c(4, SUIT.coins), c(5, SUIT.cups), c(6, SUIT.clubs)], { firstPlayer: 1, turn: 1, resumeTurn: 1 })
+  assert.equal(chooseAction(view(asMano, 1), DEFAULT_PARAMS, always(0.2)).type, 'play')
+  const asPie = run(setup(WEAK, [c(4, SUIT.coins), c(5, SUIT.cups), c(6, SUIT.clubs)]), [[0, play(c(4, SUIT.swords))]])
+  assert.deepEqual(chooseAction(view(asPie, 1), DEFAULT_PARAMS, always(0.2)), call(CALL.envido))
+})
