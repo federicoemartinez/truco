@@ -8,6 +8,7 @@ import { c } from './helpers.ts'
 
 test('envido declarations read like at the table', () => {
   assert.equal(speech({ type: 'envidoPoints', player: 0, points: 27 }, 0), 'Tengo 27')
+  assert.equal(speech({ type: 'envidoPoints', player: 0, points: 0 }, 0), 'No tengo nada')
   assert.equal(speech({ type: 'envidoPoints', player: 1, points: 31 }, 0), '31 son mejores')
   assert.equal(speech({ type: 'sonBuenas', player: 1 }, 0), 'Son buenas')
   assert.equal(speech({ type: 'call', player: 1, call: CALL.retruco }, 0), '¡Quiero retruco!')

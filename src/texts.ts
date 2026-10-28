@@ -12,6 +12,7 @@ export const T = {
   close: 'Cerrar',
   you: 'Vos',
   thinking: 'Pensando…',
+  mute: 'Silenciar',
   nextRound: 'Siguiente mano',
   rematch: 'Revancha',
   menu: 'Menú',
@@ -67,7 +68,9 @@ export function speech(e: GameEvent, firstPlayer: Player): string | null {
     case 'accept': return '¡Quiero!'
     case 'decline': return 'No quiero'
     case 'fold': return 'Me voy al mazo'
-    case 'envidoPoints': return e.player === firstPlayer ? `Tengo ${e.points}` : `${e.points} son mejores`
+    case 'envidoPoints':
+      if (e.player !== firstPlayer) return `${e.points} son mejores`
+      return e.points ? `Tengo ${e.points}` : 'No tengo nada'
     case 'sonBuenas': return 'Son buenas'
     default: return null
   }
