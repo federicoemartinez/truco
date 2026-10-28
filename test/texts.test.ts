@@ -27,12 +27,14 @@ test('card names', () => {
   assert.equal(cardName(c(1, SUIT.swords)), '1 de espada')
 })
 
-test('what Bruno knows of the player: counts, his read, and how sure he is', () => {
+test('what Bruno knows of the player: plain counts, and how sure he is', () => {
   assert.match(knowledgeHtml(newNotebook()), /Todavía no te vio cantar nada/)
   assert.doesNotMatch(knowledgeHtml(newNotebook()), /Truco/)
   const known = knowledgeHtml({ ...newNotebook(), trucoCalls: 4, trucoBluffs: 4, envidoCalls: 1, envidoBluffs: 0 })
-  assert.match(known, /Truco:<\/strong> vio 4 y mentiste en 4\. Te calcula 75% de mentiras/)
-  assert.match(known, /Envido:<\/strong> vio 1 y mentiste en 0\. Te calcula 20% de mentiras/)
-  assert.doesNotMatch(known, /conociendo/)
-  assert.match(knowledgeHtml({ ...newNotebook(), trucoCalls: 2, trucoBluffs: 1 }), /Todavía te está conociendo/)
+  assert.match(known, /Truco:<\/strong> te vio cantar 4 veces y mentiste en 4\./)
+  assert.match(known, /Envido:<\/strong> te vio cantar 1 vez y no mentiste\./)
+  assert.doesNotMatch(known, /%|conociendo/)
+  const early = knowledgeHtml({ ...newNotebook(), trucoCalls: 2, trucoBluffs: 1 })
+  assert.match(early, /Envido:<\/strong> todavía no te vio cantar\./)
+  assert.match(early, /Todavía te está conociendo/)
 })

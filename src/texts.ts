@@ -1,7 +1,6 @@
 import { REASON } from './engine.ts'
 import type { Call, Card, GameEvent, Player, Suit } from './engine.ts'
 import type { Rival } from './ai.ts'
-import { readOf } from './learn.ts'
 import type { Notebook } from './learn.ts'
 
 export const T = {
@@ -29,18 +28,19 @@ export const RIVALS: Record<Rival, { name: string; motto: string }> = {
 }
 
 const KNOWN_AFTER = 5 // calls seen before Bruno stops sounding unsure
+const times = (n: number) => (n === 1 ? '1 vez' : `${n} veces`)
 
-// The player's calls that came to light, and the share of lies Bruno plays with (see learn.ts)
+// The player's calls that came to light, as Bruno counted them (see learn.ts). Plain counts: his read
+// starts from a prior, so its percentage wouldn't match what the player remembers doing
 export function knowledgeHtml(nb: Notebook): string {
   const seen = nb.trucoCalls + nb.envidoCalls
   if (!seen) return `<h2>${T.knows}</h2><p>Todavía no te vio cantar nada.</p>`
-  const read = readOf(nb)
-  const line = (name: string, calls: number, bluffs: number, rate: number) =>
-    `<p><strong>${name}:</strong> vio ${calls} y mentiste en ${bluffs}. Te calcula ${Math.round(rate * 100)}% de mentiras.</p>`
+  const line = (name: string, calls: number, bluffs: number) => `<p><strong>${name}:</strong> ${
+    calls ? `te vio cantar ${times(calls)} y ${bluffs ? `mentiste en ${bluffs}` : 'no mentiste'}.` : 'todavía no te vio cantar.'}</p>`
   return `<h2>${T.knows}</h2>
-<p>Cuenta solo lo que se vio en la mesa: tus cantos cuyas cartas o tantos salieron a la luz.</p>
-${line('Truco', nb.trucoCalls, nb.trucoBluffs, read.trucoBluff)}
-${line('Envido', nb.envidoCalls, nb.envidoBluffs, read.envidoBluff)}
+<p>Solo cuenta los cantos en los que después vio tus cartas o tus tantos.</p>
+${line('Truco', nb.trucoCalls, nb.trucoBluffs)}
+${line('Envido', nb.envidoCalls, nb.envidoBluffs)}
 ${seen < KNOWN_AFTER ? '<p>Todavía te está conociendo.</p>' : ''}`
 }
 
