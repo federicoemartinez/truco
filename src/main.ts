@@ -87,8 +87,8 @@ mount(document.getElementById('app')!, {
   onMenu: () => {
     clearTimeout(cpuTimer)
     portal.setPlaying(false)
-    showMenu()
+    showMenu(notebook)
   },
 })
-showMenu()
+showMenu(notebook)
 portal.init()

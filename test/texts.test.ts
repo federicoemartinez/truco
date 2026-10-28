@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { CALL, REASON, SUIT } from '../src/engine.ts'
 import type { GameEvent } from '../src/engine.ts'
-import { cardName, roundSummary, speech } from '../src/texts.ts'
+import { cardName, knowledgeHtml, roundSummary, speech } from '../src/texts.ts'
+import { newNotebook } from '../src/learn.ts'
 import { c } from './helpers.ts'
 
 test('envido declarations read like at the table', () => {
@@ -24,4 +25,14 @@ test('round summary lists who scored and why', () => {
 test('card names', () => {
   assert.equal(cardName(c(11, SUIT.coins)), 'Caballo de oro')
   assert.equal(cardName(c(1, SUIT.swords)), '1 de espada')
+})
+
+test('what Bruno knows of the player: counts, his read, and how sure he is', () => {
+  assert.match(knowledgeHtml(newNotebook()), /Todavía no te vio cantar nada/)
+  assert.doesNotMatch(knowledgeHtml(newNotebook()), /Truco/)
+  const known = knowledgeHtml({ ...newNotebook(), trucoCalls: 4, trucoBluffs: 4, envidoCalls: 1, envidoBluffs: 0 })
+  assert.match(known, /Truco:<\/strong> vio 4 y mentiste en 4\. Te calcula 75% de mentiras/)
+  assert.match(known, /Envido:<\/strong> vio 1 y mentiste en 0\. Te calcula 20% de mentiras/)
+  assert.doesNotMatch(known, /conociendo/)
+  assert.match(knowledgeHtml({ ...newNotebook(), trucoCalls: 2, trucoBluffs: 1 }), /Todavía te está conociendo/)
 })

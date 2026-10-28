@@ -1,12 +1,15 @@
 import { REASON } from './engine.ts'
 import type { Call, Card, GameEvent, Player, Suit } from './engine.ts'
 import type { Rival } from './ai.ts'
+import { readOf } from './learn.ts'
+import type { Notebook } from './learn.ts'
 
 export const T = {
   title: 'Truco',
   subtitle: 'Mano a mano contra la máquina',
   chooseRival: 'Elegí tu rival',
   rules: 'Cómo se juega',
+  knows: 'Lo que Bruno sabe de vos',
   close: 'Cerrar',
   you: 'Vos',
   thinking: 'Pensando…',
@@ -23,6 +26,22 @@ export const RIVALS: Record<Rival, { name: string; motto: string }> = {
   ramon: { name: 'Ramón Mentirón', motto: 'Miente como respira' },
   john: { name: 'John Bonachón', motto: 'Si canta, es porque tiene' },
   bruno: { name: 'Bruno Aprendiz', motto: 'Te va tomando el tiempo' },
+}
+
+const KNOWN_AFTER = 5 // calls seen before Bruno stops sounding unsure
+
+// The player's calls that came to light, and the share of lies Bruno plays with (see learn.ts)
+export function knowledgeHtml(nb: Notebook): string {
+  const seen = nb.trucoCalls + nb.envidoCalls
+  if (!seen) return `<h2>${T.knows}</h2><p>Todavía no te vio cantar nada.</p>`
+  const read = readOf(nb)
+  const line = (name: string, calls: number, bluffs: number, rate: number) =>
+    `<p><strong>${name}:</strong> vio ${calls} y mentiste en ${bluffs}. Te calcula ${Math.round(rate * 100)}% de mentiras.</p>`
+  return `<h2>${T.knows}</h2>
+<p>Cuenta solo lo que se vio en la mesa: tus cantos cuyas cartas o tantos salieron a la luz.</p>
+${line('Truco', nb.trucoCalls, nb.trucoBluffs, read.trucoBluff)}
+${line('Envido', nb.envidoCalls, nb.envidoBluffs, read.envidoBluff)}
+${seen < KNOWN_AFTER ? '<p>Todavía te está conociendo.</p>' : ''}`
 }
 
 const SUIT_NAME: Record<Suit, string> = { swords: 'espada', clubs: 'basto', coins: 'oro', cups: 'copa' }
