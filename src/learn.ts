@@ -31,7 +31,8 @@ export function noteCall(nb: Notebook, seenByAi: PlayerView, action: Action): No
   return { ...nb, pending: [...nb.pending, seenByAi] }
 }
 
-// Once the round is over, with the AI's view of it: count the rival's calls whose cards came to light
+// Once the round is over, with the AI's view of it: count the rival's calls whose cards came to light,
+// or whose last card the deck gave away
 export function learnFromRound(nb: Notebook, done: PlayerView, rng: Rng): Notebook {
   const rival = other(done.me)
   const played = done.tricks.flatMap((t) => t.cards[rival] ?? [])
@@ -47,10 +48,19 @@ export function learnFromRound(nb: Notebook, done: PlayerView, rng: Rng): Notebo
     if (points < 27) next.envidoBluffs++
   }
 
+  const folded = done.log.some((e) => e.type === 'fold' && e.player === rival)
   for (const seen of nb.pending) {
     const playedThen = seen.tricks.flatMap((t) => t.cards[rival] ?? [])
     const handThen = revealed.filter((card) => !playedThen.some((p) => sameCard(p, card)))
-    if (handThen.length !== seen.opponentHandSize) continue // some of their cards never came to light
+    if (handThen.length !== seen.opponentHandSize) {
+      // Unseen cards teach nothing, except one: sung on their last card with ours already down, then the
+      // deck. A card that won (or tied in their favor) would have been played, so they knew it lost
+      if (folded && seen.opponentHandSize === 1 && seen.tricks.at(-1)?.cards[seen.me]) {
+        next.trucoCalls++
+        next.trucoBluffs++
+      }
+      continue
+    }
     next.trucoCalls++
     if (winChance(asSeenByRival(seen, handThen, playedThen), rng) < 0.5) next.trucoBluffs++
   }

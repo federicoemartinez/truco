@@ -39,7 +39,7 @@ export function knowledgeHtml(nb: Notebook): string {
   const line = (name: string, calls: number, bluffs: number) => `<p><strong>${name}:</strong> ${
     calls ? `te vio cantar ${times(calls)} y ${bluffs ? `mentiste en ${bluffs}` : 'no mentiste'}.` : 'todavía no te vio cantar.'}</p>`
   return `<h2>${T.knows}</h2>
-<p>Solo cuenta los cantos en los que después vio tus cartas o tus tantos.</p>
+<p>Solo cuenta los cantos que pudo comprobar en la mesa.</p>
 ${line('Truco', nb.trucoCalls, nb.trucoBluffs)}
 ${line('Envido', nb.envidoCalls, nb.envidoBluffs)}
 ${seen < KNOWN_AFTER ? '<p>Todavía te está conociendo.</p>' : ''}`
