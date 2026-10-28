@@ -65,6 +65,26 @@ test('a truco whose cards never came to light teaches nothing', () => {
   assert.deepEqual([nb.trucoCalls, nb.trucoBluffs, nb.pending.length], [0, 0, 0])
 })
 
+// 1-1 going into the 3rd trick, which the CPU leads with its 12: the human's 5 can't beat it
+const HUMAN_ONE_ONE = [c(7, SUIT.coins), c(4, SUIT.swords), c(5, SUIT.clubs)]
+const toThirdTrick: [Player, Action][] = [
+  [0, play(c(7, SUIT.coins))], [1, play(c(4, SUIT.cups))],
+  [0, play(c(4, SUIT.swords))], [1, play(c(3, SUIT.coins))],
+  [1, play(c(12, SUIT.clubs))],
+]
+
+test('a truco sung on the last card, facing the CPU\'s card, then the deck: a lie seen without the card', () => {
+  const { nb } = playRound(setup(HUMAN_ONE_ONE, CPU_HAND, { envidoDone: true }), [...toThirdTrick, [0, call(CALL.truco)], [1, ACCEPT], [0, FOLD]])
+  assert.deepEqual([nb.trucoCalls, nb.trucoBluffs], [1, 1])
+})
+
+test('a truco sung earlier, then the deck, still teaches nothing', () => {
+  const { nb } = playRound(setup(HUMAN_ONE_ONE, CPU_HAND, { envidoDone: true }), [
+    [0, call(CALL.truco)], [1, ACCEPT], ...toThirdTrick, [0, FOLD],
+  ])
+  assert.deepEqual([nb.trucoCalls, nb.trucoBluffs], [0, 0])
+})
+
 test('a retruco counts like a truco', () => {
   const { nb } = playRound(setup(WEAK, CPU_HAND, { envidoDone: true }), [
     [0, play(c(4, SUIT.swords))], [1, play(c(3, SUIT.coins))],
