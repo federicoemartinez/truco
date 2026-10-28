@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test test/*.test.ts",
+    "test:sim": "node --test test/sim/*.test.ts",
     "check": "tsc --noEmit",
     "zip": "rm -f truco.zip && cd dist && zip -qr ../truco.zip . && cd .. && ls -lh truco.zip"
   },

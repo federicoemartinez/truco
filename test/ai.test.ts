@@ -1,20 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { CALL, SUIT, apply, newMatch, seededRng, startRound, view } from '../src/engine.ts'
-import { DEFAULT_PARAMS, chooseAction } from '../src/ai.ts'
+import { DEFAULT_PARAMS, PROFILES, chooseAction } from '../src/ai.ts'
 import { ACCEPT, DECLINE, c, call, play, run, setup } from './helpers.ts'
 
 const WEAK = [c(4, SUIT.swords), c(5, SUIT.clubs), c(6, SUIT.cups)]
 
-test('2000 AI vs AI matches: never an illegal move, always finished', () => {
-  for (let seed = 1; seed <= 2000; seed++) {
+test('200 AI vs AI matches across the rivals: never an illegal move, always finished', () => {
+  const rivals = Object.values(PROFILES)
+  for (let seed = 1; seed <= 200; seed++) {
     const rng = seededRng(seed)
+    const params = [rivals[seed % rivals.length], rivals[(seed + 1) % rivals.length]]
     let s = newMatch(rng)
     for (let steps = 0; s.phase !== 'matchOver'; steps++) {
       assert.ok(steps < 5000, `match ${seed} did not finish`)
       s = s.phase === 'roundOver'
         ? startRound(s, rng)
-        : apply(s, s.turn, chooseAction(view(s, s.turn), DEFAULT_PARAMS, rng))
+        : apply(s, s.turn, chooseAction(view(s, s.turn), params[s.turn], rng))
     }
     assert.equal(Math.max(...s.score), 30)
   }
