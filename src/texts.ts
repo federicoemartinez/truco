@@ -1,21 +1,27 @@
 import { REASON } from './engine.ts'
 import type { Call, Card, GameEvent, Player, Suit } from './engine.ts'
+import type { Rival } from './ai.ts'
 
 export const T = {
   title: 'Truco',
   subtitle: 'Mano a mano contra la máquina',
-  play: 'Jugar contra la máquina',
+  chooseRival: 'Elegí tu rival',
   rules: 'Cómo se juega',
   close: 'Cerrar',
   you: 'Vos',
-  cpu: 'Máquina',
   thinking: 'Pensando…',
   nextRound: 'Siguiente mano',
   rematch: 'Revancha',
   menu: 'Menú',
   won: (mine: number, theirs: number) => `¡Ganaste ${mine} a ${theirs}!`,
-  lost: (mine: number, theirs: number) => `Ganó la máquina ${theirs} a ${mine}`,
+  lost: (rival: string, mine: number, theirs: number) => `Ganó ${rival} ${theirs} a ${mine}`,
   trick: ['1ª', '2ª', '3ª'],
+}
+
+export const RIVALS: Record<Rival, { name: string; motto: string }> = {
+  aristoteles: { name: 'Aristóteles Medio', motto: 'Ni mucho ni poco' },
+  ramon: { name: 'Ramón Mentirón', motto: 'Miente como respira' },
+  john: { name: 'John Bonachón', motto: 'Si canta, es porque tiene' },
 }
 
 const SUIT_NAME: Record<Suit, string> = { swords: 'espada', clubs: 'basto', coins: 'oro', cups: 'copa' }
@@ -47,9 +53,9 @@ export function speech(e: GameEvent, firstPlayer: Player): string | null {
   }
 }
 
-export function roundSummary(log: GameEvent[], me: Player): string {
+export function roundSummary(log: GameEvent[], me: Player, rival: string): string {
   return log
-    .flatMap((e) => (e.type === 'score' ? [`${e.player === me ? T.you : T.cpu} +${e.points} (${e.reason === REASON.envido ? 'envido' : 'mano'})`] : []))
+    .flatMap((e) => (e.type === 'score' ? [`${e.player === me ? T.you : rival} +${e.points} (${e.reason === REASON.envido ? 'envido' : 'mano'})`] : []))
     .join(' · ')
 }
 

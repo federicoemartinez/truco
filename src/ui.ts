@@ -1,10 +1,11 @@
 import { other, sameCard } from './engine.ts'
 import type { Action, GameEvent, Player, PlayerView, Trick } from './engine.ts'
 import { SPRITE, backSvg, cardSvg } from './cards.ts'
-import { ACTION_LABEL, CALL_LABEL, RULES_HTML, T, cardName, roundSummary, speech } from './texts.ts'
+import { ACTION_LABEL, CALL_LABEL, RIVALS, RULES_HTML, T, cardName, roundSummary, speech } from './texts.ts'
+import type { Rival } from './ai.ts'
 
 export type Handlers = {
-  onStart(): void
+  onStart(rival: Rival): void
   onAction(action: Action): void
   onNextRound(): void
   onRematch(): void
@@ -15,6 +16,7 @@ type PlayEvent = Extract<GameEvent, { type: 'play' }>
 
 let root: HTMLElement
 let current: PlayerView | null = null
+let rivalName = ''
 let lastRender = 0
 let seen = { round: 0, plays: 0, bubbles: [null, null] as (string | null)[] }
 
@@ -27,7 +29,7 @@ export function mount(el: HTMLElement, h: Handlers) {
     if (performance.now() - lastRender < 350) return
     const target = (e.target as Element).closest<HTMLElement>('[data-do]')
     switch (target?.dataset.do) {
-      case 'start': return h.onStart()
+      case 'start': return h.onStart(target!.dataset.rival as Rival)
       case 'rules': return root.querySelector<HTMLDialogElement>('#rules')!.showModal()
       case 'next': return h.onNextRound()
       case 'rematch': return h.onRematch()
@@ -48,14 +50,17 @@ export function showMenu() {
     <main class="menu">
       <h1>${T.title}</h1>
       <p>${T.subtitle}</p>
-      <button class="primary" data-do="start">${T.play}</button>
+      <p>${T.chooseRival}</p>
+      ${Object.entries(RIVALS).map(([id, r], k) => `<button class="rival${k === 0 ? ' primary' : ''}" data-do="start" data-rival="${id}">
+        <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
       <button data-do="rules">${T.rules}</button>
       <dialog id="rules">${RULES_HTML}<form method="dialog"><button>${T.close}</button></form></dialog>
     </main>`
 }
 
-export function renderGame(v: PlayerView) {
+export function renderGame(v: PlayerView, rival: Rival) {
   current = v
+  rivalName = RIVALS[rival].name
   lastRender = performance.now()
   const opp = other(v.me)
   const newRound = v.round !== seen.round
@@ -107,7 +112,7 @@ export function renderGame(v: PlayerView) {
     <main class="table">
       <header class="top">
         <div class="opponent">
-          <div class="opp-hand" role="img" aria-label="${T.cpu}: ${v.opponentHandSize}">${backs}</div>
+          <div class="opp-hand" role="img" aria-label="${rivalName}: ${v.opponentHandSize}">${backs}</div>
           ${thinking}
           ${bubble(opp, 'bubble-row')}
         </div>
@@ -141,7 +146,7 @@ function bubbleText(v: PlayerView, p: Player): string | null {
 function overlay(v: PlayerView): string {
   if (v.phase === 'roundOver') {
     return `<div class="overlay"><div class="panel">
-      <p>${roundSummary(v.log, v.me)}</p>
+      <p>${roundSummary(v.log, v.me, rivalName)}</p>
       <button class="primary" data-do="next">${T.nextRound}</button>
     </div></div>`
   }
@@ -149,8 +154,8 @@ function overlay(v: PlayerView): string {
     const mine = v.score[v.me]
     const theirs = v.score[other(v.me)]
     return `<div class="overlay"><div class="panel">
-      <h2>${v.winner === v.me ? T.won(mine, theirs) : T.lost(mine, theirs)}</h2>
-      <p>${roundSummary(v.log, v.me)}</p>
+      <h2>${v.winner === v.me ? T.won(mine, theirs) : T.lost(rivalName, mine, theirs)}</h2>
+      <p>${roundSummary(v.log, v.me, rivalName)}</p>
       <button class="primary" data-do="rematch">${T.rematch}</button>
       <button data-do="menu">${T.menu}</button>
     </div></div>`
@@ -161,7 +166,7 @@ function overlay(v: PlayerView): string {
 function scoreboard(v: PlayerView): string {
   const row = (p: Player, label: string) =>
     `<div class="score-row"><span>${label}</span><strong>${v.score[p]}</strong>${tally(v.score[p])}</div>`
-  return `<div class="score">${row(v.me, T.you)}${row(other(v.me), T.cpu)}</div>`
+  return `<div class="score">${row(v.me, T.you)}${row(other(v.me), rivalName)}</div>`
 }
 
 // Fósforos: groups of five drawn as a square plus its diagonal, malas | buenas

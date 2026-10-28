@@ -18,7 +18,7 @@ test('round summary lists who scored and why', () => {
     { type: 'score', player: 0, points: 2, reason: REASON.envido },
     { type: 'score', player: 1, points: 1, reason: REASON.round },
   ]
-  assert.equal(roundSummary(log, 0), 'Vos +2 (envido) · Máquina +1 (mano)')
+  assert.equal(roundSummary(log, 0, 'Ramón Mentirón'), 'Vos +2 (envido) · Ramón Mentirón +1 (mano)')
 })
 
 test('card names', () => {

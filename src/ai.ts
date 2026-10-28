@@ -8,6 +8,14 @@ import type { Action, Call, Card, Player, PlayerView, Rng } from './engine.ts'
 export type AiParams = { bluff: number; aggression: number; fish: number }
 export const DEFAULT_PARAMS: AiParams = { bluff: 0.15, aggression: 0.5, fish: 0.4 }
 
+// The rivals to pick from; names and mottos live in texts.ts
+export const PROFILES = {
+  aristoteles: DEFAULT_PARAMS,
+  ramon: { bluff: 0.35, aggression: 0.75, fish: 0.1 }, // lies a lot and wants everything
+  john: { bluff: 0.01, aggression: 0.25, fish: 0 }, // if he sings, he has it
+} satisfies Record<string, AiParams>
+export type Rival = keyof typeof PROFILES
+
 export function chooseAction(v: PlayerView, params: AiParams = DEFAULT_PARAMS, rng: Rng = Math.random): Action {
   const top = v.pending.at(-1)
   if (top?.kind === BET.envido) return respondEnvido(v, params, rng)

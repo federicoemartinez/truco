@@ -30,6 +30,8 @@ button { font: inherit; cursor: pointer; }
   padding: 10px 16px; font-weight: 600; min-height: 44px;
 }
 .menu .primary, .panel .primary, .actions .accept { background: var(--accent); }
+.menu .rival { display: grid; gap: 2px; width: min(300px, 100%); }
+.menu .rival small { font-weight: 400; opacity: .85; }
 .actions .fold { background: transparent; color: var(--ink); border: 1px solid rgb(255 255 255 / .4); }
 dialog { max-width: min(520px, 92vw); max-height: 80dvh; border: 0; border-radius: 12px; text-align: left; user-select: text; }
 dialog::backdrop { background: rgb(0 0 0 / .6); }
