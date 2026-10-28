@@ -90,3 +90,18 @@ test('the AI lies about the envido more after the mano played without singing', 
   const asPie = run(setup(WEAK, [c(4, SUIT.coins), c(5, SUIT.cups), c(6, SUIT.clubs)]), [[0, play(c(4, SUIT.swords))]])
   assert.deepEqual(chooseAction(view(asPie, 1), DEFAULT_PARAMS, always(0.15)), call(CALL.envido))
 })
+
+test('the AI hardly lies in the truco when its declared envido gives its last card away', () => {
+  const human = [c(3, SUIT.swords), c(12, SUIT.coins), c(5, SUIT.clubs)]
+  const cpu = [c(7, SUIT.cups), c(6, SUIT.cups), c(2, SUIT.clubs)] // 33: after the 7, the 6 de copa is left
+  const tricks: [0 | 1, ReturnType<typeof play>][] = [
+    [0, play(c(3, SUIT.swords))], [1, play(c(7, SUIT.cups))],
+    [0, play(c(5, SUIT.clubs))], [1, play(c(2, SUIT.clubs))],
+  ]
+  const liar = { ...DEFAULT_PARAMS, trucoBluff: 1 }
+  const lies = (s: ReturnType<typeof setup>) =>
+    Array.from({ length: 100 }, (_, seed) => chooseAction(view(s, 1), liar, seededRng(seed))).filter((a) => a.type === 'call').length
+  const hidden = run(setup(human, cpu), tricks)
+  const givenAway = run(setup(human, cpu), [[0, call(CALL.envido)], [1, ACCEPT], ...tricks])
+  assert.ok(lies(hidden) > 80 && lies(givenAway) < 50, `lied ${lies(hidden)} vs ${lies(givenAway)} of 100`)
+})

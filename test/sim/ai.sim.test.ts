@@ -22,7 +22,7 @@ test('2000 AI vs AI matches: never an illegal move, always finished', () => {
 
 // How a rival plays against Aristóteles: shares of its envido calls that are lies, of its good
 // envidos it keeps quiet as mano, of its trucos sung before its own first card, and of its truco
-// calls and raises made with under 40% chances (lies)
+// calls and raises made when losing was likelier than winning (lies)
 function habits(params: AiParams, matches = 150) {
   const rng = seededRng(42)
   const probe = seededRng(7) // its own stream, so measuring doesn't change the games
@@ -48,7 +48,7 @@ function habits(params: AiParams, matches = 150) {
         }
         if (a.type === 'call' && !isEnvido(a.call)) {
           n.trucoCalls++
-          if (winChance(v, probe) < 0.4) n.trucoLies++
+          if (winChance(v, probe) < 0.5) n.trucoLies++
         }
         if (a.type === 'call' && a.call === CALL.truco) {
           n.trucos++
