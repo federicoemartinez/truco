@@ -167,6 +167,7 @@ terminar el partido en mitad de una mano).
   nunca de farol; después, si las chances superan un umbral derivado de `aggression`, o de farol con
   probabilidad `trucoBluff`, escalada por cuán creíble es: sus chances vistas desde el rival, que solo
   conoce la mesa y los tantos declarados (si el envido que declaró delata su carta, casi no miente).
+  Con mano buena, con probabilidad `slowplay` se hace el muerto para que cante el rival y retrucar.
 - **Truco — responder:** quiero / no quiero / subir según las chances. **Regla dura:** si un no
   quiero le da el partido al rival, siempre acepta.
 - **Carta:** respondiendo, gana con la carta más baja que alcance; si no puede ganar, tira la más

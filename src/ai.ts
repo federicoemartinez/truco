@@ -5,15 +5,16 @@ import type { Action, Call, Card, Player, PlayerView, Rng } from './engine.ts'
 
 // envidoBluff: chance of singing envido without points; trucoBluff: chance per turn of a truco or raise
 // without the cards; aggression: lowers the bar to call and accept; fish: chance of hiding a good
-// envido as mano, to raise when the pie sings it
-export type AiParams = { envidoBluff: number; trucoBluff: number; aggression: number; fish: number }
-export const DEFAULT_PARAMS: AiParams = { envidoBluff: 0.09, trucoBluff: 0.35, aggression: 0.5, fish: 0.4 }
+// envido as mano, to raise when the pie sings it; slowplay: chance of keeping quiet with a good hand
+// ("hacerse el muerto") so the rival sings truco and we raise
+export type AiParams = { envidoBluff: number; trucoBluff: number; aggression: number; fish: number; slowplay: number }
+export const DEFAULT_PARAMS: AiParams = { envidoBluff: 0.09, trucoBluff: 0.35, aggression: 0.5, fish: 0.4, slowplay: 0.1 }
 
 // The rivals to pick from; names and mottos live in texts.ts
 export const PROFILES = {
   aristoteles: DEFAULT_PARAMS,
-  ramon: { envidoBluff: 0.35, trucoBluff: 1, aggression: 0.75, fish: 0.1 }, // lies a lot and wants everything
-  john: { envidoBluff: 0.01, trucoBluff: 0.1, aggression: 0.25, fish: 0 }, // if he sings envido, he has it
+  ramon: { envidoBluff: 0.35, trucoBluff: 1, aggression: 0.75, fish: 0.1, slowplay: 0.5 }, // lies a lot and wants everything
+  john: { envidoBluff: 0.01, trucoBluff: 0.1, aggression: 0.25, fish: 0, slowplay: 0.05 }, // if he sings envido, he has it
 } satisfies Record<string, AiParams>
 export type Rival = keyof typeof PROFILES
 
@@ -70,8 +71,8 @@ function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefine
   if (v.tricks.length === 1 && v.tricks[0].cards[v.me] === null) {
     return rng() < 0.25 && winChance(v, rng) >= 0.9 - 0.2 * params.aggression ? raise : undefined
   }
-  if (winChance(v, rng) >= 0.7 - 0.2 * params.aggression || bluffs(v, params, rng)) return raise
-  return undefined
+  if (winChance(v, rng) >= 0.7 - 0.2 * params.aggression) return rng() < params.slowplay ? undefined : raise
+  return bluffs(v, params, rng) ? raise : undefined
 }
 
 function respondTruco(v: PlayerView, params: AiParams, rng: Rng): Action {

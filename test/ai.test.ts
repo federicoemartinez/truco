@@ -68,7 +68,7 @@ test('the AI reads the last card from the envido the human declared', () => {
     [0, play(c(7, SUIT.cups))], [1, play(c(1, SUIT.cups))],
   ])
   for (let seed = 1; seed <= 200; seed++) {
-    assert.deepEqual(chooseAction(view(s, 1), DEFAULT_PARAMS, seededRng(seed)), call(CALL.truco))
+    assert.deepEqual(chooseAction(view(s, 1), { ...DEFAULT_PARAMS, slowplay: 0 }, seededRng(seed)), call(CALL.truco))
   }
 })
 
@@ -104,4 +104,13 @@ test('the AI hardly lies in the truco when its declared envido gives its last ca
   const hidden = run(setup(human, cpu), tricks)
   const givenAway = run(setup(human, cpu), [[0, call(CALL.envido)], [1, ACCEPT], ...tricks])
   assert.ok(lies(hidden) > 80 && lies(givenAway) < 50, `lied ${lies(hidden)} vs ${lies(givenAway)} of 100`)
+})
+
+test('slowplaying, the AI keeps quiet with a sure hand so the rival sings the truco', () => {
+  const strong = [c(1, SUIT.swords), c(1, SUIT.clubs), c(7, SUIT.swords)]
+  const s = run(setup(WEAK, strong, { envidoDone: true }), [[0, play(c(4, SUIT.swords))], [1, play(c(7, SUIT.swords))]])
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepEqual(chooseAction(view(s, 1), { ...DEFAULT_PARAMS, slowplay: 0 }, seededRng(seed)), call(CALL.truco))
+    assert.equal(chooseAction(view(s, 1), { ...DEFAULT_PARAMS, slowplay: 1 }, seededRng(seed)).type, 'play')
+  }
 })
