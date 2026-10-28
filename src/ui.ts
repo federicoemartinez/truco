@@ -1,8 +1,10 @@
 import { other, sameCard } from './engine.ts'
 import type { Action, GameEvent, Player, PlayerView, Trick } from './engine.ts'
 import { SPRITE, backSvg, cardSvg } from './cards.ts'
-import { ACTION_LABEL, CALL_LABEL, RIVALS, RULES_HTML, T, cardName, roundSummary, speech } from './texts.ts'
+import { ACTION_LABEL, CALL_LABEL, RIVALS, RULES_HTML, T, cardName, knowledgeHtml, roundSummary, speech } from './texts.ts'
+import type { Notebook } from './learn.ts'
 import type { Rival } from './ai.ts'
+import { isMuted, toggleMute } from './voice.ts'
 
 export type Handlers = {
   onStart(rival: Rival): void
@@ -31,6 +33,11 @@ export function mount(el: HTMLElement, h: Handlers) {
     switch (target?.dataset.do) {
       case 'start': return h.onStart(target!.dataset.rival as Rival)
       case 'rules': return root.querySelector<HTMLDialogElement>('#rules')!.showModal()
+      case 'knows': return root.querySelector<HTMLDialogElement>('#knows')!.showModal()
+      case 'mute':
+        toggleMute()
+        target!.outerHTML = muteButton()
+        return
       case 'next': return h.onNextRound()
       case 'rematch': return h.onRematch()
       case 'menu': return h.onMenu()
@@ -42,7 +49,7 @@ export function mount(el: HTMLElement, h: Handlers) {
   })
 }
 
-export function showMenu() {
+export function showMenu(known: Notebook) {
   current = null
   lastRender = performance.now()
   seen = { round: 0, plays: 0, bubbles: [null, null] }
@@ -54,7 +61,10 @@ export function showMenu() {
       ${Object.entries(RIVALS).map(([id, r], k) => `<button class="rival${k === 0 ? ' primary' : ''}" data-do="start" data-rival="${id}">
         <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
       <button data-do="rules">${T.rules}</button>
+      <button data-do="knows">${T.knows}</button>
+      ${muteButton()}
       <dialog id="rules">${RULES_HTML}<form method="dialog"><button>${T.close}</button></form></dialog>
+      <dialog id="knows">${knowledgeHtml(known)}<form method="dialog"><button>${T.close}</button></form></dialog>
     </main>`
 }
 
@@ -116,6 +126,7 @@ export function renderGame(v: PlayerView, rival: Rival) {
           ${thinking}
           ${bubble(opp, 'bubble-row')}
         </div>
+        ${muteButton()}
         ${scoreboard(v)}
       </header>
       <section class="tricks">${tricks}</section>
@@ -162,6 +173,9 @@ function overlay(v: PlayerView): string {
   }
   return ''
 }
+
+const muteButton = () =>
+  `<button class="mute" data-do="mute" aria-label="${T.mute}" aria-pressed="${isMuted()}">${isMuted() ? '🔇' : '🔊'}</button>`
 
 function scoreboard(v: PlayerView): string {
   const row = (p: Player, label: string) =>

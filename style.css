@@ -33,6 +33,7 @@ button { font: inherit; cursor: pointer; }
 .menu .rival { display: grid; gap: 2px; width: min(300px, 100%); }
 .menu .rival small { font-weight: 400; opacity: .85; }
 .actions .fold { background: transparent; color: var(--ink); border: 1px solid rgb(255 255 255 / .4); }
+.menu .mute, .mute { background: none; border: 0; padding: 0; min-width: 44px; min-height: 44px; font-size: 22px; }
 dialog { max-width: min(520px, 92vw); max-height: 80dvh; border: 0; border-radius: 12px; text-align: left; user-select: text; }
 dialog::backdrop { background: rgb(0 0 0 / .6); }
 

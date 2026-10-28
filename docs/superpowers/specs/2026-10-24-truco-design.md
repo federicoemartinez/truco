@@ -152,8 +152,8 @@ terminar el partido en mitad de una mano).
 
 ## IA (`ai.ts`)
 
-`chooseAction(view, params, rng)`, con `params = { envidoBluff, trucoBluff, aggression, fish }`; cada rival
-(Aristóteles Medio, Ramón Mentirón, John Bonachón) es un juego de valores en `PROFILES`.
+`chooseAction(view, params, rng, read)`, con `params = { envidoBluff, trucoBluff, aggression, fish, slowplay, reads }`; cada rival
+(Aristóteles Medio, Ramón Mentirón, John Bonachón, Bruno Aprendiz) es un juego de valores en `PROFILES`.
 
 - **Envido — cantar:** ≥ 30 → real envido o falta según el marcador; 27–29 → envido; menos →
   envido con probabilidad `envidoBluff` (el doble si el mano jugó sin cantar). Siendo mano con ≥ 28,
@@ -170,6 +170,11 @@ terminar el partido en mitad de una mano).
   Con mano buena, con probabilidad `slowplay` se hace el muerto para que cante el rival y retrucar.
 - **Truco — responder:** quiero / no quiero / subir según las chances. **Regla dura:** si un no
   quiero le da el partido al rival, siempre acepta.
+- **Lectura del rival:** `chooseAction` recibe un `Read` (cuánto miente el rival en truco y envido,
+  ver `learn.ts`). Contra un mentiroso baja el umbral de quiero, contra uno honesto lo sube, en
+  proporción a `reads`. Solo Bruno Aprendiz lee (`reads: 1`): es Aristóteles más la lectura. Los
+  otros tres tienen `reads: 0` y juegan siempre igual. El cuaderno se llena en todos los partidos,
+  contra cualquier rival: Bruno mira desde la tribuna.
 - **Carta:** respondiendo, gana con la carta más baja que alcance; si no puede ganar, tira la más
   baja (o parda si conviene guardar una carta grande). Saliendo en 1ª, la del medio. Saliendo en
   2ª/3ª, la más alta si cierra la mano, si no la más baja.

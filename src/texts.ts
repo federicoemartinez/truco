@@ -1,15 +1,18 @@
 import { REASON } from './engine.ts'
 import type { Call, Card, GameEvent, Player, Suit } from './engine.ts'
 import type { Rival } from './ai.ts'
+import type { Notebook } from './learn.ts'
 
 export const T = {
   title: 'Truco',
   subtitle: 'Mano a mano contra la máquina',
   chooseRival: 'Elegí tu rival',
   rules: 'Cómo se juega',
+  knows: 'Lo que Bruno sabe de vos',
   close: 'Cerrar',
   you: 'Vos',
   thinking: 'Pensando…',
+  mute: 'Silenciar',
   nextRound: 'Siguiente mano',
   rematch: 'Revancha',
   menu: 'Menú',
@@ -22,6 +25,24 @@ export const RIVALS: Record<Rival, { name: string; motto: string }> = {
   aristoteles: { name: 'Aristóteles Medio', motto: 'Ni mucho ni poco' },
   ramon: { name: 'Ramón Mentirón', motto: 'Miente como respira' },
   john: { name: 'John Bonachón', motto: 'Si canta, es porque tiene' },
+  bruno: { name: 'Bruno Aprendiz', motto: 'Te va tomando el tiempo' },
+}
+
+const KNOWN_AFTER = 5 // calls seen before Bruno stops sounding unsure
+const times = (n: number) => (n === 1 ? '1 vez' : `${n} veces`)
+
+// The player's calls that came to light, as Bruno counted them (see learn.ts). Plain counts: his read
+// starts from a prior, so its percentage wouldn't match what the player remembers doing
+export function knowledgeHtml(nb: Notebook): string {
+  const seen = nb.trucoCalls + nb.envidoCalls
+  if (!seen) return `<h2>${T.knows}</h2><p>Todavía no te vio cantar nada.</p>`
+  const line = (name: string, calls: number, bluffs: number) => `<p><strong>${name}:</strong> ${
+    calls ? `te vio cantar ${times(calls)} y ${bluffs ? `mentiste en ${bluffs}` : 'no mentiste'}.` : 'todavía no te vio cantar.'}</p>`
+  return `<h2>${T.knows}</h2>
+<p>Solo cuenta los cantos en los que después vio tus cartas o tus tantos.</p>
+${line('Truco', nb.trucoCalls, nb.trucoBluffs)}
+${line('Envido', nb.envidoCalls, nb.envidoBluffs)}
+${seen < KNOWN_AFTER ? '<p>Todavía te está conociendo.</p>' : ''}`
 }
 
 const SUIT_NAME: Record<Suit, string> = { swords: 'espada', clubs: 'basto', coins: 'oro', cups: 'copa' }
@@ -47,7 +68,9 @@ export function speech(e: GameEvent, firstPlayer: Player): string | null {
     case 'accept': return '¡Quiero!'
     case 'decline': return 'No quiero'
     case 'fold': return 'Me voy al mazo'
-    case 'envidoPoints': return e.player === firstPlayer ? `Tengo ${e.points}` : `${e.points} son mejores`
+    case 'envidoPoints':
+      if (e.player !== firstPlayer) return `${e.points} son mejores`
+      return e.points ? `Tengo ${e.points}` : 'No tengo nada'
     case 'sonBuenas': return 'Son buenas'
     default: return null
   }
