@@ -55,7 +55,13 @@ function act(p: Player, action: Action) {
   voice.say(state.log.slice(before), state.firstPlayer, (who) => (who === HUMAN ? voice.PLAYER_VOICE : voice.VOICES[rival]))
 }
 
-function cpuMove() {
+const VOICE_WAIT_MAX = 5000 // ms; a clip that never loads can't stall the match
+
+function cpuMove(waited = 0) {
+  if (voice.busy() && waited < VOICE_WAIT_MAX) {
+    cpuTimer = window.setTimeout(() => cpuMove(waited + 100), 100) // let the last words finish first
+    return
+  }
   const v = view(state, CPU)
   try {
     act(CPU, chooseAction(v, PROFILES[rival], Math.random, readOf(notebook)))
