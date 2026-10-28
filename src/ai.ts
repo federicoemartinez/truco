@@ -180,6 +180,11 @@ function chooseCard(v: PlayerView): Action {
   const trickIndex = v.tricks.length - 1
   const oppCard = v.tricks[trickIndex].cards[other(v.me)]
   if (oppCard) {
+    // Lost whatever we play: go to the deck rather than show the card (a won envido is still shown)
+    const results = v.tricks.slice(0, -1).map((t) => t.winner as Player | 'tie')
+    const losesRound = (card: Card) =>
+      roundWinner([...results, v.me === 0 ? trickWinner(card, oppCard) : trickWinner(oppCard, card)], v.firstPlayer) === other(v.me)
+    if (v.hand.every(losesRound)) return find(v, 'fold')!
     const target = cardPower(oppCard)
     const winning = weakestFirst.find((card) => cardPower(card) > target)
     if (winning) return play(winning)

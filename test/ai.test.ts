@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { CALL, SUIT, apply, newMatch, seededRng, startRound, view } from '../src/engine.ts'
 import { DEFAULT_PARAMS, PROFILES, chooseAction } from '../src/ai.ts'
-import { ACCEPT, DECLINE, c, call, play, run, setup } from './helpers.ts'
+import { ACCEPT, DECLINE, FOLD, c, call, play, run, setup } from './helpers.ts'
 
 const WEAK = [c(4, SUIT.swords), c(5, SUIT.clubs), c(6, SUIT.cups)]
 
@@ -112,5 +112,20 @@ test('slowplaying, the AI keeps quiet with a sure hand so the rival sings the tr
   for (let seed = 1; seed <= 50; seed++) {
     assert.deepEqual(chooseAction(view(s, 1), { ...DEFAULT_PARAMS, slowplay: 0 }, seededRng(seed)), call(CALL.truco))
     assert.equal(chooseAction(view(s, 1), { ...DEFAULT_PARAMS, slowplay: 1 }, seededRng(seed)).type, 'play')
+  }
+})
+
+test('at 1-1, if its last card cannot win the round, the AI goes to the deck instead of showing it', () => {
+  const human = [c(4, SUIT.swords), c(7, SUIT.cups), c(3, SUIT.cups)]
+  const lead = (cpuLast: ReturnType<typeof c>) => run(setup(human, [c(5, SUIT.clubs), c(6, SUIT.coins), cpuLast], { envidoDone: true, trucoLevel: 1, raiseRights: 0 }), [
+    [0, play(c(4, SUIT.swords))], [1, play(c(5, SUIT.clubs))], // the AI takes the first
+    [1, play(c(6, SUIT.coins))], [0, play(c(7, SUIT.cups))], // the human the second
+    [0, play(c(3, SUIT.cups))],
+  ])
+  const losing = lead(c(12, SUIT.coins))
+  const tying = lead(c(3, SUIT.swords)) // a tied third goes to whoever won the first: the AI
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepEqual(chooseAction(view(losing, 1), DEFAULT_PARAMS, seededRng(seed)), FOLD)
+    assert.deepEqual(chooseAction(view(tying, 1), DEFAULT_PARAMS, seededRng(seed)), play(c(3, SUIT.swords)))
   }
 })
