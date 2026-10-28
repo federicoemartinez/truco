@@ -29,6 +29,7 @@ let ctx: AudioContext | undefined
 let queue = Promise.resolve()
 let generation = 0 // bumped by stop(): clips queued before it stay quiet
 let playing: AudioBufferSourceNode | undefined
+let pending = 0 // lines queued or being said
 const clips = new Map<string, Promise<AudioBuffer>>()
 
 function readMuted(): boolean {
@@ -40,6 +41,9 @@ function readMuted(): boolean {
 }
 
 export const isMuted = () => muted
+
+// Still talking: the game waits for it, so a slow phone never plays ahead of the words
+export const busy = () => pending > 0
 
 export function toggleMute() {
   muted = !muted
@@ -64,17 +68,19 @@ export function stop() {
 
 // Says the events one after another, each in its speaker's voice
 export function say(events: GameEvent[], firstPlayer: Player, voiceOf: (p: Player) => Voice) {
-  if (muted || !ctx) return
+  if (muted || ctx?.state !== 'running') return // audio still locked: queued lines would never end, and the game waits for them
   for (const e of events) {
     const name = clipName(e, firstPlayer)
     if (!name) continue
     const buffer = load(name) // fetch now, play in turn
     const gen = generation
+    pending++
     queue = queue
       .then(async () => {
         if (gen === generation) await play(await buffer, voiceOf(e.player))
       })
       .catch(console.warn) // a missing clip skips that line, never the rest
+      .finally(() => pending--)
   }
 }
 
