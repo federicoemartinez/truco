@@ -1,10 +1,12 @@
-export type Suit = 'swords' | 'clubs' | 'coins' | 'cups'
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 10 | 11 | 12
 export type Card = { rank: Rank; suit: Suit }
 export type Player = 0 | 1
 export type Rng = () => number
 
-export const SUITS: Suit[] = ['swords', 'clubs', 'coins', 'cups']
+// Suit names: use SUIT.x instead of string literals
+export const SUIT = { swords: 'swords', clubs: 'clubs', coins: 'coins', cups: 'cups' } as const
+export type Suit = (typeof SUIT)[keyof typeof SUIT]
+export const SUITS: Suit[] = Object.values(SUIT)
 export const RANKS: Rank[] = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12]
 
 export const other = (p: Player): Player => (p === 0 ? 1 : 0)
@@ -40,23 +42,29 @@ const RANK_POWER: Record<Rank, number> = { 3: 10, 2: 9, 1: 8, 12: 7, 11: 6, 10: 
 
 // Truco hierarchy: higher beats lower, equal power is a tie (parda)
 export function cardPower(card: Card): number {
-  if (card.rank === 1 && card.suit === 'swords') return 14
-  if (card.rank === 1 && card.suit === 'clubs') return 13
-  if (card.rank === 7 && card.suit === 'swords') return 12
-  if (card.rank === 7 && card.suit === 'coins') return 11
+  if (card.rank === 1 && card.suit === SUIT.swords) return 14
+  if (card.rank === 1 && card.suit === SUIT.clubs) return 13
+  if (card.rank === 7 && card.suit === SUIT.swords) return 12
+  if (card.rank === 7 && card.suit === SUIT.coins) return 11
   return RANK_POWER[card.rank]
 }
 
-export function envidoPoints(cards: Card[]): number {
-  const value = (card: Card) => (card.rank >= 10 ? 0 : card.rank)
-  let best = Math.max(...cards.map(value))
+const envidoValue = (card: Card) => (card.rank >= 10 ? 0 : card.rank)
+const envidoSum = (cards: Card[]) => cards.reduce((sum, card) => sum + envidoValue(card), cards.length > 1 ? 20 : 0)
+
+// The cards that make up the envido: the best pair of the same suit, else the highest card
+export function envidoCards(cards: Card[]): Card[] {
+  let best = [cards.reduce((a, b) => (envidoValue(b) > envidoValue(a) ? b : a))]
   for (let i = 0; i < cards.length; i++) {
     for (let j = i + 1; j < cards.length; j++) {
-      if (cards[i].suit === cards[j].suit) best = Math.max(best, 20 + value(cards[i]) + value(cards[j]))
+      const pair = [cards[i], cards[j]]
+      if (cards[i].suit === cards[j].suit && envidoSum(pair) > envidoSum(best)) best = pair
     }
   }
   return best
 }
+
+export const envidoPoints = (cards: Card[]) => envidoSum(envidoCards(cards))
 
 // Call names: use CALL.x instead of string literals
 export const CALL = {
@@ -89,6 +97,7 @@ export type GameEvent =
   | { type: 'fold'; player: Player }
   | { type: 'envidoPoints'; player: Player; points: number }
   | { type: 'sonBuenas'; player: Player }
+  | { type: 'show'; player: Player; cards: Card[] } // the envido winner's unplayed envido cards, at the end
   | { type: 'score'; player: Player; points: number; reason: Reason }
 
 export type Trick = { cards: [Card | null, Card | null]; winner: Player | 'tie' | null }
@@ -298,6 +307,16 @@ function resolveEnvido(s: State) {
     s.log.push({ type: 'sonBuenas', player: pie })
   }
   award(s, winner, envidoAcceptedPoints(s.envidoCalls, s.score, winner), REASON.envido)
+  if (s.phase === 'matchOver') showEnvido(s)
+}
+
+// Whoever won a sung envido shows it at the end: the envido cards still in hand go face up
+function showEnvido(s: State) {
+  const declared = s.log.findLast((e) => e.type === 'envidoPoints') // the winner declares last
+  if (!declared) return
+  const p = declared.player
+  const cards = envidoCards(s.dealt[p]).filter((card) => s.hands[p].some((h) => sameCard(h, card)))
+  if (cards.length) s.log.push({ type: 'show', player: p, cards })
 }
 
 // After an answer: the next pending call is answered, or the interrupted play-turn resumes
@@ -317,8 +336,7 @@ function play(s: State, p: Player, card: Card) {
     s.turn = other(p)
     return
   }
-  const diff = cardPower(a) - cardPower(b)
-  trick.winner = diff > 0 ? 0 : diff < 0 ? 1 : 'tie'
+  trick.winner = trickWinner(a, b)
   const winner = roundWinner(s.tricks.map((t) => t.winner as Player | 'tie'), s.firstPlayer)
   if (winner !== null) {
     endRound(s, winner)
@@ -326,6 +344,12 @@ function play(s: State, p: Player, card: Card) {
   }
   s.tricks.push({ cards: [null, null], winner: null })
   s.turn = trick.winner === 'tie' ? s.firstPlayer : trick.winner
+}
+
+// a: player 0's card, b: player 1's
+export function trickWinner(a: Card, b: Card): Player | 'tie' {
+  const diff = cardPower(a) - cardPower(b)
+  return diff > 0 ? 0 : diff < 0 ? 1 : 'tie'
 }
 
 // results: winners of the completed tricks, in order
@@ -361,6 +385,7 @@ function endRound(s: State, winner: Player) {
   award(s, winner, s.trucoLevel + 1, REASON.round)
   s.pending = []
   if (s.phase === 'playing') s.phase = 'roundOver'
+  showEnvido(s)
 }
 
 function fold(s: State, p: Player) {

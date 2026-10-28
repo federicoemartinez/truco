@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  BET, CALL, ENVIDO_CALLS, REASON, apply, cardPower, envidoAcceptedPoints, envidoDeclinedPoints, envidoPoints, faltaPoints, legalActions,
-  newDeck, newMatch, other, roundWinner, seededRng, shuffle, startRound, view,
+  BET, CALL, ENVIDO_CALLS, REASON, SUIT, apply, cardPower, envidoAcceptedPoints, envidoCards, envidoDeclinedPoints, envidoPoints,
+  faltaPoints, legalActions, newDeck, newMatch, other, roundWinner, seededRng, shuffle, startRound, view,
 } from '../src/engine.ts'
 import type { EnvidoCall } from '../src/engine.ts'
 import { ACCEPT, DECLINE, FOLD, c, call, has, play, run, setup } from './helpers.ts'
@@ -16,28 +16,28 @@ test('the deck has 40 distinct cards without 8s and 9s', () => {
 
 test('cardPower follows the truco hierarchy', () => {
   const order = [
-    c(1, 'swords'), c(1, 'clubs'), c(7, 'swords'), c(7, 'coins'), c(3, 'cups'), c(2, 'coins'),
-    c(1, 'cups'), c(12, 'swords'), c(11, 'clubs'), c(10, 'coins'), c(7, 'cups'), c(6, 'swords'),
-    c(5, 'clubs'), c(4, 'coins'),
+    c(1, SUIT.swords), c(1, SUIT.clubs), c(7, SUIT.swords), c(7, SUIT.coins), c(3, SUIT.cups), c(2, SUIT.coins),
+    c(1, SUIT.cups), c(12, SUIT.swords), c(11, SUIT.clubs), c(10, SUIT.coins), c(7, SUIT.cups), c(6, SUIT.swords),
+    c(5, SUIT.clubs), c(4, SUIT.coins),
   ]
   for (let i = 1; i < order.length; i++) {
     assert.ok(cardPower(order[i - 1]) > cardPower(order[i]), `${JSON.stringify(order[i - 1])} > ${JSON.stringify(order[i])}`)
   }
-  assert.equal(cardPower(c(1, 'cups')), cardPower(c(1, 'coins')))
-  assert.equal(cardPower(c(7, 'cups')), cardPower(c(7, 'clubs')))
-  assert.equal(cardPower(c(3, 'swords')), cardPower(c(3, 'cups')))
+  assert.equal(cardPower(c(1, SUIT.cups)), cardPower(c(1, SUIT.coins)))
+  assert.equal(cardPower(c(7, SUIT.cups)), cardPower(c(7, SUIT.clubs)))
+  assert.equal(cardPower(c(3, SUIT.swords)), cardPower(c(3, SUIT.cups)))
 })
 
 test('envidoPoints: 20 plus the pair of the same suit, figures count 0', () => {
-  assert.equal(envidoPoints([c(7, 'swords'), c(6, 'swords'), c(4, 'cups')]), 33)
-  assert.equal(envidoPoints([c(12, 'coins'), c(11, 'coins'), c(1, 'cups')]), 20)
-  assert.equal(envidoPoints([c(10, 'coins'), c(5, 'coins'), c(7, 'cups')]), 25)
-  assert.equal(envidoPoints([c(7, 'cups'), c(6, 'cups'), c(5, 'cups')]), 33)
+  assert.equal(envidoPoints([c(7, SUIT.swords), c(6, SUIT.swords), c(4, SUIT.cups)]), 33)
+  assert.equal(envidoPoints([c(12, SUIT.coins), c(11, SUIT.coins), c(1, SUIT.cups)]), 20)
+  assert.equal(envidoPoints([c(10, SUIT.coins), c(5, SUIT.coins), c(7, SUIT.cups)]), 25)
+  assert.equal(envidoPoints([c(7, SUIT.cups), c(6, SUIT.cups), c(5, SUIT.cups)]), 33)
 })
 
 test('envidoPoints without a pair is the highest card, figures count 0', () => {
-  assert.equal(envidoPoints([c(4, 'swords'), c(6, 'clubs'), c(5, 'cups')]), 6)
-  assert.equal(envidoPoints([c(10, 'swords'), c(11, 'clubs'), c(12, 'coins')]), 0)
+  assert.equal(envidoPoints([c(4, SUIT.swords), c(6, SUIT.clubs), c(5, SUIT.cups)]), 6)
+  assert.equal(envidoPoints([c(10, SUIT.swords), c(11, SUIT.clubs), c(12, SUIT.coins)]), 0)
 })
 
 test('shuffle is a reproducible permutation', () => {
@@ -48,8 +48,8 @@ test('shuffle is a reproducible permutation', () => {
   assert.equal(new Set(a.map((k) => `${k.rank}-${k.suit}`)).size, 40)
 })
 
-const MANO = [c(1, 'swords'), c(4, 'cups'), c(5, 'cups')]
-const PIE = [c(3, 'coins'), c(6, 'clubs'), c(7, 'cups')]
+const MANO = [c(1, SUIT.swords), c(4, SUIT.cups), c(5, SUIT.cups)]
+const PIE = [c(3, SUIT.coins), c(6, SUIT.clubs), c(7, SUIT.cups)]
 
 test('newMatch deals 3 different cards to each player', () => {
   const s = newMatch(seededRng(3))
@@ -62,20 +62,20 @@ test('newMatch deals 3 different cards to each player', () => {
 
 test('the mano leads; the higher card takes the trick and leads the next one', () => {
   let s = setup(MANO, PIE)
-  s = run(s, [[0, play(c(1, 'swords'))], [1, play(c(3, 'coins'))]])
+  s = run(s, [[0, play(c(1, SUIT.swords))], [1, play(c(3, SUIT.coins))]])
   assert.equal(s.tricks[0].winner, 0)
   assert.equal(s.turn, 0)
-  s = run(s, [[0, play(c(4, 'cups'))], [1, play(c(6, 'clubs'))]])
+  s = run(s, [[0, play(c(4, SUIT.cups))], [1, play(c(6, SUIT.clubs))]])
   assert.equal(s.tricks[1].winner, 1)
   assert.equal(s.turn, 1)
-  s = run(s, [[1, play(c(7, 'cups'))], [0, play(c(5, 'cups'))]])
+  s = run(s, [[1, play(c(7, SUIT.cups))], [0, play(c(5, SUIT.cups))]])
   assert.equal(s.phase, 'roundOver')
   assert.deepEqual(s.score, [0, 1])
 })
 
 test('after a tied trick the mano leads', () => {
-  let s = setup([c(3, 'swords'), c(4, 'cups'), c(5, 'cups')], [c(3, 'cups'), c(6, 'clubs'), c(7, 'cups')], { firstPlayer: 1 })
-  s = run(s, [[1, play(c(3, 'cups'))], [0, play(c(3, 'swords'))]])
+  let s = setup([c(3, SUIT.swords), c(4, SUIT.cups), c(5, SUIT.cups)], [c(3, SUIT.cups), c(6, SUIT.clubs), c(7, SUIT.cups)], { firstPlayer: 1 })
+  s = run(s, [[1, play(c(3, SUIT.cups))], [0, play(c(3, SUIT.swords))]])
   assert.equal(s.tricks[0].winner, 'tie')
   assert.equal(s.turn, 1)
 })
@@ -118,7 +118,7 @@ test('apply rejects out-of-turn moves and cards not in hand, without mutating', 
   const s = setup(MANO, PIE)
   const before = JSON.stringify(s)
   assert.throws(() => apply(s, 1, play(PIE[0])), /Illegal/)
-  assert.throws(() => apply(s, 0, play(c(12, 'coins'))), /Illegal/)
+  assert.throws(() => apply(s, 0, play(c(12, SUIT.coins))), /Illegal/)
   apply(s, 0, play(MANO[0]))
   assert.equal(JSON.stringify(s), before)
 })
@@ -134,8 +134,8 @@ test('view shows only your own cards and your legal actions', () => {
   assert.ok(!JSON.stringify(v).includes('{"rank":1,"suit":"swords"}'), 'the mano\'s 1 de espada leaked')
 })
 
-const STRONG = [c(1, 'swords'), c(1, 'clubs'), c(4, 'cups')]
-const WEAK = [c(4, 'coins'), c(5, 'coins'), c(6, 'cups')]
+const STRONG = [c(1, SUIT.swords), c(1, SUIT.clubs), c(4, SUIT.cups)]
+const WEAK = [c(4, SUIT.coins), c(5, SUIT.coins), c(6, SUIT.cups)]
 
 test('truco accepted: the round is worth 2 and the accepter holds the quiero', () => {
   let s = run(setup(STRONG, WEAK), [[0, call(CALL.truco)]])
@@ -241,9 +241,9 @@ test('falta envido: the match in malas, the leader\'s missing points in buenas',
   assert.equal(faltaPoints([18, 18], 0), 12)
 })
 
-const MANO_27 = [c(7, 'cups'), c(10, 'cups'), c(4, 'swords')]
-const PIE_27 = [c(7, 'coins'), c(12, 'coins'), c(3, 'clubs')]
-const PIE_33 = [c(6, 'swords'), c(7, 'swords'), c(4, 'cups')]
+const MANO_27 = [c(7, SUIT.cups), c(10, SUIT.cups), c(4, SUIT.swords)]
+const PIE_27 = [c(7, SUIT.coins), c(12, SUIT.coins), c(3, SUIT.clubs)]
+const PIE_33 = [c(6, SUIT.swords), c(7, SUIT.swords), c(4, SUIT.cups)]
 const isEnvidoAction = (a: { type: string; call?: string }) =>
   a.type === 'call' && (ENVIDO_CALLS as readonly string[]).includes(a.call!)
 
@@ -323,13 +323,39 @@ test('folding while facing an envido pays the declined envido plus the round', (
   assert.equal(s.phase, 'roundOver')
 })
 
+test('envidoCards: the pair that scores, else the highest card', () => {
+  assert.deepEqual(envidoCards(PIE_33), [c(6, SUIT.swords), c(7, SUIT.swords)])
+  assert.deepEqual(envidoCards([c(4, SUIT.swords), c(6, SUIT.clubs), c(5, SUIT.cups)]), [c(6, SUIT.clubs)])
+  assert.deepEqual(envidoCards([c(7, SUIT.cups), c(6, SUIT.cups), c(5, SUIT.cups)]), [c(7, SUIT.cups), c(6, SUIT.cups)])
+})
+
+const shown = (log: { type: string }[]) => log.filter((e) => e.type === 'show')
+
+test('the envido winner shows the envido cards still in hand when the round ends', () => {
+  const s = run(setup(MANO_27, PIE_33), [[0, call(CALL.envido)], [1, ACCEPT], [0, play(c(4, SUIT.swords))], [1, play(c(7, SUIT.swords))], [1, FOLD]])
+  assert.deepEqual(shown(s.log), [{ type: 'show', player: 1, cards: [c(6, SUIT.swords)] }])
+})
+
+test('nothing to show after a no quiero; whoever said son buenas shows nothing', () => {
+  assert.deepEqual(shown(run(setup(MANO_27, PIE_33), [[0, call(CALL.envido)], [1, DECLINE], [0, FOLD]]).log), [])
+  const s = run(setup(MANO_27, PIE_27), [[0, call(CALL.envido)], [1, ACCEPT], [0, FOLD]])
+  assert.deepEqual(shown(s.log), [{ type: 'show', player: 0, cards: [c(7, SUIT.cups), c(10, SUIT.cups)] }])
+})
+
+test('an envido that ends the match is shown too', () => {
+  const MANO_33 = [c(7, SUIT.swords), c(6, SUIT.swords), c(4, SUIT.cups)]
+  const s = run(setup(MANO_33, PIE_27, { score: [28, 0] }), [[0, call(CALL.envido)], [1, ACCEPT]])
+  assert.equal(s.phase, 'matchOver')
+  assert.deepEqual(shown(s.log), [{ type: 'show', player: 0, cards: [c(7, SUIT.swords), c(6, SUIT.swords)] }])
+})
+
 test('folding while an envido sits on a truco pays the envido plus 1', () => {
   const s = run(setup(MANO_27, PIE_33), [[0, call(CALL.truco)], [1, call(CALL.envido)], [0, FOLD]])
   assert.deepEqual(s.score, [0, 2])
 })
 
 test('an envido can end the match mid-round, even with a truco waiting', () => {
-  const MANO_33 = [c(7, 'swords'), c(6, 'swords'), c(4, 'cups')]
+  const MANO_33 = [c(7, SUIT.swords), c(6, SUIT.swords), c(4, SUIT.cups)]
   const s = run(setup(MANO_33, PIE_27, { score: [28, 0] }), [[0, call(CALL.truco)], [1, call(CALL.envido)], [0, ACCEPT]])
   assert.deepEqual(s.score, [30, 0])
   assert.equal(s.phase, 'matchOver')
@@ -340,7 +366,7 @@ test('an envido can end the match mid-round, even with a truco waiting', () => {
 })
 
 test('falta envido in malas wins the match', () => {
-  const MANO_33 = [c(7, 'swords'), c(6, 'swords'), c(4, 'cups')]
+  const MANO_33 = [c(7, SUIT.swords), c(6, SUIT.swords), c(4, SUIT.cups)]
   const s = run(setup(MANO_33, PIE_27, { score: [10, 5] }), [[0, call(CALL.faltaEnvido)], [1, ACCEPT]])
   assert.deepEqual(s.score, [30, 5])
   assert.equal(s.phase, 'matchOver')

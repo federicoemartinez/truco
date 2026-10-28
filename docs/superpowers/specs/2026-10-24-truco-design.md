@@ -152,18 +152,24 @@ terminar el partido en mitad de una mano).
 
 ## IA (`ai.ts`)
 
-`chooseAction(view, params, rng)`, con `params = { bluff: 0.15, aggression: 0.5 }`.
+`chooseAction(view, params, rng)`, con `params = { envidoBluff, trucoBluff, aggression, fish }`; cada rival
+(Aristóteles Medio, Ramón Mentirón, John Bonachón) es un juego de valores en `PROFILES`.
 
 - **Envido — cantar:** ≥ 30 → real envido o falta según el marcador; 27–29 → envido; menos →
-  envido con probabilidad `bluff`. Siendo mano con ≥ 31, a veces se calla para dejar cantar y subir.
-- **Envido — responder:** acepta si tantos ≥ 26 + 2 por escalón cantado (− 1 si es mano); sube con
-  ≥ 31; ante la falta considera si perderla le cuesta el partido.
-- **Truco — fuerza:** número 0..1 según `cardPower` de las cartas que le quedan y el estado de las
-  bazas (ganadas/perdidas/pardas), considerando las cartas ya jugadas.
-- **Truco — cantar/subir:** si la fuerza supera un umbral derivado de `aggression`, o con
-  probabilidad `bluff`.
-- **Truco — responder:** quiero / no quiero / subir según la fuerza. **Regla dura:** si un no quiero
-  le da el partido al rival, siempre acepta.
+  envido con probabilidad `envidoBluff` (el doble si el mano jugó sin cantar). Siendo mano con ≥ 28,
+  con probabilidad `fish` se calla para dejar cantar y subir (salir a la pesca).
+- **Envido — responder:** acepta si tantos ≥ 26 + 2 por escalón cantado (− 1 si es mano, ± según
+  `aggression`); sube con ≥ 30 o de farol con probabilidad `envidoBluff / 3`; ante la falta considera
+  si perderla le cuesta el partido.
+- **Truco — chances:** Monte Carlo: reparte al rival manos compatibles con las cartas que mostró y
+  los tantos que declaró (o su "son buenas"), y juega cada una con minimax a cartas vistas.
+- **Truco — cantar/subir:** antes de su primera carta, solo de vez en cuando y con mano casi segura,
+  nunca de farol; después, si las chances superan un umbral derivado de `aggression`, o de farol con
+  probabilidad `trucoBluff`, escalada por cuán creíble es: sus chances vistas desde el rival, que solo
+  conoce la mesa y los tantos declarados (si el envido que declaró delata su carta, casi no miente).
+  Con mano buena, con probabilidad `slowplay` se hace el muerto para que cante el rival y retrucar.
+- **Truco — responder:** quiero / no quiero / subir según las chances. **Regla dura:** si un no
+  quiero le da el partido al rival, siempre acepta.
 - **Carta:** respondiendo, gana con la carta más baja que alcance; si no puede ganar, tira la más
   baja (o parda si conviene guardar una carta grande). Saliendo en 1ª, la del medio. Saliendo en
   2ª/3ª, la más alta si cierra la mano, si no la más baja.

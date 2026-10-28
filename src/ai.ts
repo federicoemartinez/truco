@@ -1,13 +1,26 @@
-import { BET, CALL, cardPower, envidoDeclinedPoints, envidoPoints, faltaPoints, isEnvido, other } from './engine.ts'
-import type { Action, Call, Card, PlayerView, Rng } from './engine.ts'
+import {
+  BET, CALL, cardPower, envidoDeclinedPoints, envidoPoints, faltaPoints, isEnvido, newDeck, other, roundWinner, sameCard, shuffle, trickWinner,
+} from './engine.ts'
+import type { Action, Call, Card, Player, PlayerView, Rng } from './engine.ts'
 
-// bluff: chance of calling with a bad hand; aggression: lowers the bar to call and accept truco
-export type AiParams = { bluff: number; aggression: number }
-export const DEFAULT_PARAMS: AiParams = { bluff: 0.15, aggression: 0.5 }
+// envidoBluff: chance of singing envido without points; trucoBluff: chance per turn of a truco or raise
+// without the cards; aggression: lowers the bar to call and accept; fish: chance of hiding a good
+// envido as mano, to raise when the pie sings it; slowplay: chance of keeping quiet with a good hand
+// ("hacerse el muerto") so the rival sings truco and we raise
+export type AiParams = { envidoBluff: number; trucoBluff: number; aggression: number; fish: number; slowplay: number }
+export const DEFAULT_PARAMS: AiParams = { envidoBluff: 0.09, trucoBluff: 0.35, aggression: 0.5, fish: 0.4, slowplay: 0.1 }
+
+// The rivals to pick from; names and mottos live in texts.ts
+export const PROFILES = {
+  aristoteles: DEFAULT_PARAMS,
+  ramon: { envidoBluff: 0.35, trucoBluff: 1, aggression: 0.75, fish: 0.1, slowplay: 0.5 }, // lies a lot and wants everything
+  john: { envidoBluff: 0.01, trucoBluff: 0.1, aggression: 0.25, fish: 0, slowplay: 0.05 }, // if he sings envido, he has it
+} satisfies Record<string, AiParams>
+export type Rival = keyof typeof PROFILES
 
 export function chooseAction(v: PlayerView, params: AiParams = DEFAULT_PARAMS, rng: Rng = Math.random): Action {
   const top = v.pending.at(-1)
-  if (top?.kind === BET.envido) return respondEnvido(v)
+  if (top?.kind === BET.envido) return respondEnvido(v, params, rng)
   if (top?.kind === BET.truco) return respondTruco(v, params, rng)
   return callEnvido(v, params, rng, true) ?? callTruco(v, params, rng) ?? chooseCard(v)
 }
@@ -18,29 +31,33 @@ function find(v: PlayerView, type: Action['type'], name?: Call): Action | undefi
 
 const trucoCall = (v: PlayerView) => v.legal.find((a) => a.type === 'call' && !isEnvido(a.call))
 
-function callEnvido(v: PlayerView, params: AiParams, rng: Rng, maySandbag: boolean): Action | undefined {
+function callEnvido(v: PlayerView, params: AiParams, rng: Rng, mayFish: boolean): Action | undefined {
   if (!find(v, 'call', CALL.envido)) return undefined
   const points = envidoPoints(v.dealt)
   const behind = v.score[other(v.me)] - v.score[v.me]
-  // As mano with a great envido, sometimes stay quiet so the opponent calls and we raise
-  if (maySandbag && points >= 31 && v.firstPlayer === v.me && rng() < 0.3) return undefined
+  const mano = v.firstPlayer === v.me
+  // Salir a la pesca: as mano with a good envido, stay quiet so the pie sings it and we raise
+  if (mayFish && mano && points >= 28 && rng() < params.fish) return undefined
   if (points >= 30) return find(v, 'call', points >= 32 || behind >= 10 ? CALL.faltaEnvido : CALL.realEnvido)
-  if (points >= 27 || rng() < params.bluff) return find(v, 'call', CALL.envido)
+  if (points >= 27) return find(v, 'call', CALL.envido)
+  // A mano who played without singing is likely short of points: the best moment to lie
+  const manoPassed = !mano && v.tricks[0].cards[other(v.me)] !== null
+  if (rng() < params.envidoBluff * (manoPassed ? 2 : 1)) return find(v, 'call', CALL.envido)
   return undefined
 }
 
-function respondEnvido(v: PlayerView): Action {
+function respondEnvido(v: PlayerView, params: AiParams, rng: Rng): Action {
   const points = envidoPoints(v.dealt)
   const opp = other(v.me)
   const calls = v.envidoCalls
-  if (points >= 31) {
+  if (points >= 30 || rng() < params.envidoBluff / 3) {
     const raise = find(v, 'call', CALL.realEnvido) ?? (points >= 32 ? find(v, 'call', CALL.faltaEnvido) : undefined)
     if (raise) return raise
   }
   const declineLosesMatch = v.score[opp] + envidoDeclinedPoints(calls) >= 30
   const isFalta = calls[calls.length - 1] === CALL.faltaEnvido
   const faltaCostsMatch = v.score[opp] + faltaPoints(v.score, opp) >= 30
-  const threshold = isFalta ? (faltaCostsMatch ? 30 : 28) : 26 + 2 * (calls.length - 1)
+  const threshold = isFalta ? (faltaCostsMatch ? 30 : 28) : 26 + 2 * (calls.length - 1) - Math.round(4 * (params.aggression - 0.5))
   const manoBonus = v.firstPlayer === v.me ? 1 : 0 // the mano wins ties
   if (declineLosesMatch || points >= threshold - manoBonus) return find(v, 'accept')!
   return find(v, 'decline')!
@@ -49,36 +66,112 @@ function respondEnvido(v: PlayerView): Action {
 function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefined {
   const raise = trucoCall(v)
   if (!raise) return undefined
-  if (handStrength(v) >= 0.7 - 0.2 * params.aggression || rng() < params.bluff) return raise
-  return undefined
+  // Hardly anyone sings truco before playing a card: even with a sure hand it pays to wait for the first
+  // trick, so only now and then, and never as a bluff
+  if (v.tricks.length === 1 && v.tricks[0].cards[v.me] === null) {
+    return rng() < 0.25 && winChance(v, rng) >= 0.9 - 0.2 * params.aggression ? raise : undefined
+  }
+  if (winChance(v, rng) >= 0.7 - 0.2 * params.aggression) return rng() < params.slowplay ? undefined : raise
+  return bluffs(v, params, rng) ? raise : undefined
 }
 
 function respondTruco(v: PlayerView, params: AiParams, rng: Rng): Action {
   const envido = callEnvido(v, params, rng, false) // el envido está primero
   if (envido) return envido
-  const strength = handStrength(v)
+  const chance = winChance(v, rng)
   const raise = trucoCall(v)
-  if (raise && (strength >= 0.85 - 0.2 * params.aggression || rng() < params.bluff / 2)) return raise
+  if (raise && (chance >= 0.85 - 0.2 * params.aggression || bluffs(v, params, rng))) return raise
   const declineLosesMatch = v.score[other(v.me)] + v.trucoLevel + 1 >= 30
-  if (declineLosesMatch || strength >= 0.55 - 0.2 * params.aggression) return find(v, 'accept')!
+  if (declineLosesMatch || chance >= 0.5 - 0.2 * params.aggression) return find(v, 'accept')!
   return find(v, 'decline')!
 }
 
-// 0..1 estimate of taking the round, from the cards still ours and how the tricks went
-function handStrength(v: PlayerView): number {
+const SAMPLES = 60
+
+// Chance of taking the round: deal every hand that fits what was shown and said, and play each one
+// out with both hands face up. Seen by 'me' only the rival's cards are hidden; seen by the 'rival'
+// ours are too, so it is how strong we look from across the table
+export function winChance(v: PlayerView, rng: Rng, seenBy: 'me' | 'rival' = 'me'): number {
   const opp = other(v.me)
-  const current = v.tricks[v.tricks.length - 1]
-  const onTable = current.cards[v.me]
-  const powers = [...v.hand, ...(onTable ? [onTable] : [])].map(cardPower).sort((a, b) => b - a)
-  if (powers.length === 0) return 0
-  const best = powers[0] / 14
-  const avg = powers.reduce((a, b) => a + b, 0) / powers.length / 14
-  let strength = 0.6 * best + 0.4 * avg
-  const done = v.tricks.filter((t) => t.winner !== null)
-  strength += 0.25 * (done.filter((t) => t.winner === v.me).length - done.filter((t) => t.winner === opp).length)
-  const oppCard = current.cards[opp]
-  if (oppCard && !onTable) strength += powers[0] > cardPower(oppCard) ? 0.1 : -0.2
-  return Math.min(1, Math.max(0, strength))
+  const onTable = v.tricks.flatMap((t) => t.cards.filter((card) => card !== null))
+  const known = seenBy === 'me' ? [...onTable, ...v.hand] : onTable
+  const pool = newDeck().filter((card) => !known.some((seen) => sameCard(seen, card)))
+  const results = v.tricks.slice(0, -1).map((t) => t.winner as Player | 'tie')
+  const table = v.tricks[v.tricks.length - 1].cards
+  const turn = v.pending.length ? v.resumeTurn : v.turn // whose card is next
+  let wins = 0
+  let n = 0
+  for (let i = 0; i < SAMPLES; i++) {
+    const hands: [Card[], Card[]] = [[], []]
+    const theirs = draw(pool, v.opponentHandSize, fitsWhatWasSaid(v, opp), rng)
+    if (!theirs) continue
+    hands[opp] = theirs
+    if (seenBy === 'me') {
+      hands[v.me] = v.hand
+    } else {
+      const ours = draw(pool.filter((card) => !theirs.includes(card)), v.hand.length, fitsWhatWasSaid(v, v.me), rng)
+      if (!ours) continue
+      hands[v.me] = ours
+    }
+    n++
+    if (playout(hands, results, table, turn, v.firstPlayer) === v.me) wins++
+  }
+  return n ? wins / n : 0.5
+}
+
+// ponytail: rejection sampling; a rare declared envido may yield few samples, enumerate the hands if that shows
+function draw(pool: Card[], size: number, fits: (hand: Card[]) => boolean, rng: Rng): Card[] | undefined {
+  for (let tries = 0; tries < 50; tries++) {
+    const hand = shuffle(pool, rng).slice(0, size)
+    if (fits(hand)) return hand
+  }
+  return undefined
+}
+
+// A player's unplayed cards must add up to the envido they declared; after a "son buenas", to no
+// more than what the mano declared
+function fitsWhatWasSaid(v: PlayerView, p: Player): (hand: Card[]) => boolean {
+  const shown = v.tricks.flatMap((t) => t.cards[p] ?? [])
+  const declared: (number | undefined)[] = [undefined, undefined]
+  let sonBuenas = false
+  for (const e of v.log) {
+    if (e.type === 'envidoPoints') declared[e.player] = e.points
+    if (e.type === 'sonBuenas' && e.player === p) sonBuenas = true
+  }
+  const exact = declared[p]
+  const cap = sonBuenas ? declared[other(p)] : undefined
+  return (hand) => {
+    const points = envidoPoints([...shown, ...hand])
+    return exact !== undefined ? points === exact : cap === undefined || points <= cap
+  }
+}
+
+// A bluff only works if the rival can't tell we are weak: the weaker we look from their side,
+// the less we lie
+function bluffs(v: PlayerView, params: AiParams, rng: Rng): boolean {
+  const r = rng()
+  return r < params.trucoBluff && r < params.trucoBluff * Math.min(1, winChance(v, rng, 'rival') / 0.5)
+}
+
+// Who takes the round when both play their best seeing every card (minimax over at most 3 cards each)
+function playout(hands: [Card[], Card[]], results: (Player | 'tie')[], table: [Card | null, Card | null], turn: Player, first: Player): Player {
+  const decided = roundWinner(results, first)
+  if (decided !== null) return decided
+  for (const card of hands[turn]) {
+    const rest: [Card[], Card[]] = [hands[0], hands[1]]
+    rest[turn] = hands[turn].filter((h) => h !== card)
+    const t: [Card | null, Card | null] = [table[0], table[1]]
+    t[turn] = card
+    let winner: Player
+    if (t[0] && t[1]) {
+      const won = trickWinner(t[0], t[1])
+      winner = playout(rest, [...results, won], [null, null], won === 'tie' ? first : won, first)
+    } else {
+      winner = playout(rest, results, t, other(turn), first)
+    }
+    if (winner === turn) return turn
+  }
+  return other(turn)
 }
 
 function chooseCard(v: PlayerView): Action {

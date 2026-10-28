@@ -1,6 +1,7 @@
 import { apply, newMatch, startRound, view } from './engine.ts'
 import type { Player, State } from './engine.ts'
-import { chooseAction } from './ai.ts'
+import { PROFILES, chooseAction } from './ai.ts'
+import type { Rival } from './ai.ts'
 import { mount, renderGame, showMenu } from './ui.ts'
 import * as portal from './portal.ts'
 
@@ -8,10 +9,11 @@ const HUMAN: Player = 0
 const CPU: Player = 1
 
 let state: State
+let rival: Rival
 let cpuTimer: number | undefined
 
 function update() {
-  renderGame(view(state, HUMAN))
+  renderGame(view(state, HUMAN), rival)
   if (state.phase === 'matchOver') portal.setPlaying(false)
   if (state.phase === 'playing' && state.turn === CPU) cpuTimer = window.setTimeout(cpuMove, 700 + Math.random() * 500)
 }
@@ -19,7 +21,7 @@ function update() {
 function cpuMove() {
   const v = view(state, CPU)
   try {
-    state = apply(state, CPU, chooseAction(v))
+    state = apply(state, CPU, chooseAction(v, PROFILES[rival]))
   } catch (err) {
     console.error(err) // never leave the match stuck on an AI bug
     state = apply(state, CPU, v.legal[0])
@@ -35,7 +37,10 @@ function startMatch() {
 }
 
 mount(document.getElementById('app')!, {
-  onStart: startMatch,
+  onStart: (picked) => {
+    rival = picked
+    startMatch()
+  },
   onAction: (action) => {
     state = apply(state, HUMAN, action)
     update()
