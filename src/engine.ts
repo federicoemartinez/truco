@@ -1,10 +1,12 @@
-export type Suit = 'swords' | 'clubs' | 'coins' | 'cups'
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 10 | 11 | 12
 export type Card = { rank: Rank; suit: Suit }
 export type Player = 0 | 1
 export type Rng = () => number
 
-export const SUITS: Suit[] = ['swords', 'clubs', 'coins', 'cups']
+// Suit names: use SUIT.x instead of string literals
+export const SUIT = { swords: 'swords', clubs: 'clubs', coins: 'coins', cups: 'cups' } as const
+export type Suit = (typeof SUIT)[keyof typeof SUIT]
+export const SUITS: Suit[] = Object.values(SUIT)
 export const RANKS: Rank[] = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12]
 
 export const other = (p: Player): Player => (p === 0 ? 1 : 0)
@@ -40,10 +42,10 @@ const RANK_POWER: Record<Rank, number> = { 3: 10, 2: 9, 1: 8, 12: 7, 11: 6, 10: 
 
 // Truco hierarchy: higher beats lower, equal power is a tie (parda)
 export function cardPower(card: Card): number {
-  if (card.rank === 1 && card.suit === 'swords') return 14
-  if (card.rank === 1 && card.suit === 'clubs') return 13
-  if (card.rank === 7 && card.suit === 'swords') return 12
-  if (card.rank === 7 && card.suit === 'coins') return 11
+  if (card.rank === 1 && card.suit === SUIT.swords) return 14
+  if (card.rank === 1 && card.suit === SUIT.clubs) return 13
+  if (card.rank === 7 && card.suit === SUIT.swords) return 12
+  if (card.rank === 7 && card.suit === SUIT.coins) return 11
   return RANK_POWER[card.rank]
 }
 
