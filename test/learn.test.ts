@@ -74,6 +74,33 @@ test('a retruco counts like a truco', () => {
   assert.deepEqual([nb.trucoCalls, nb.trucoBluffs], [1, 1])
 })
 
+test('an envido the human (pie) loses with "son buenas" is still counted once all cards are played', () => {
+  // The human (pie) sings 6 and never gets to declare it: the mano's envido is higher, so the human
+  // only says "son buenas". Its points only come to light once its three cards are played out
+  const human = [c(4, SUIT.swords), c(1, SUIT.cups), c(6, SUIT.clubs)]
+  const cpu = [c(2, SUIT.coins), c(5, SUIT.swords), c(3, SUIT.coins)]
+  const { nb } = playRound(setup(human, cpu, { firstPlayer: 1, turn: 1, resumeTurn: 1 }), [
+    [1, play(c(2, SUIT.coins))], [0, call(CALL.envido)], [1, ACCEPT],
+    [0, play(c(4, SUIT.swords))], [1, play(c(5, SUIT.swords))], [0, play(c(1, SUIT.cups))],
+    [0, play(c(6, SUIT.clubs))], [1, play(c(3, SUIT.coins))],
+  ])
+  assert.deepEqual([nb.envidoCalls, nb.envidoBluffs], [1, 1]) // 6 < 27
+})
+
+test('a human truco call whose hand only comes to light through the end-of-round show is counted', () => {
+  // The human (mano) calls truco before playing a card, then wins the round 2-0: one of its envido
+  // cards is never played, but it still comes to light as the shown envido winner's leftover card
+  const human = [c(7, SUIT.clubs), c(6, SUIT.clubs), c(2, SUIT.swords)]
+  const cpu = [c(4, SUIT.coins), c(5, SUIT.swords), c(3, SUIT.cups)]
+  const { nb } = playRound(setup(human, cpu), [
+    [0, call(CALL.envido)], [1, ACCEPT],
+    [0, call(CALL.truco)], [1, ACCEPT],
+    [0, play(c(2, SUIT.swords))], [1, play(c(4, SUIT.coins))],
+    [0, play(c(7, SUIT.clubs))], [1, play(c(5, SUIT.swords))],
+  ])
+  assert.deepEqual([nb.trucoCalls, nb.trucoBluffs], [1, 1]) // counted thanks to the show, not to the plays alone
+})
+
 test('a saved notebook survives a reload; anything odd starts over', () => {
   const nb = { ...newNotebook(), trucoCalls: 5, trucoBluffs: 2, envidoCalls: 3, envidoBluffs: 1 }
   assert.deepEqual(fromSaved(toSaved(nb)), nb)

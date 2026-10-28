@@ -149,3 +149,23 @@ test('the AI calls a liar more and an honest rival less, as much as it reads', (
   const blind = { ...DEFAULT_PARAMS, reads: 0 }
   assert.equal(answersTruco(blind, liar), answersTruco(blind, honest))
 })
+
+// Fresh deals where the human (mano) opens with an envido; how often the AI answers anything but no quiero
+function answersEnvido(params: typeof DEFAULT_PARAMS, read: { trucoBluff: number; envidoBluff: number }): number {
+  let wants = 0
+  for (let seed = 1; seed <= 300; seed++) {
+    const dealt = newMatch(seededRng(seed))
+    const s = run({ ...dealt, firstPlayer: 0, turn: 0, resumeTurn: 0 }, [[0, call(CALL.envido)]])
+    if (chooseAction(view(s, 1), params, seededRng(seed), read).type !== 'decline') wants++
+  }
+  return wants
+}
+
+test('the AI accepts a liar\'s envido more and an honest rival\'s less, as much as it reads', () => {
+  const liar = { trucoBluff: 0.6, envidoBluff: 0.6 }
+  const honest = { trucoBluff: 0.02, envidoBluff: 0.02 }
+  const [lied, prior, straight] = [liar, PRIOR_READ, honest].map((read) => answersEnvido(DEFAULT_PARAMS, read))
+  assert.ok(lied > prior + 20 && prior > straight + 30, `${lied} / ${prior} / ${straight} of 300`)
+  const blind = { ...DEFAULT_PARAMS, reads: 0 }
+  assert.equal(answersEnvido(blind, liar), answersEnvido(blind, honest))
+})
