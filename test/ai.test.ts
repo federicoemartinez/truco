@@ -84,9 +84,9 @@ test('as mano with 33 the AI sometimes keeps quiet to fish, and raises when the 
 })
 
 test('the AI lies about the envido more after the mano played without singing', () => {
-  const always = (x: number) => () => x // between bluff and twice the bluff
+  const always = (x: number) => () => x // between envidoBluff and twice it
   const asMano = setup(WEAK, [c(4, SUIT.coins), c(5, SUIT.cups), c(6, SUIT.clubs)], { firstPlayer: 1, turn: 1, resumeTurn: 1 })
-  assert.equal(chooseAction(view(asMano, 1), DEFAULT_PARAMS, always(0.2)).type, 'play')
+  assert.equal(chooseAction(view(asMano, 1), DEFAULT_PARAMS, always(0.15)).type, 'play')
   const asPie = run(setup(WEAK, [c(4, SUIT.coins), c(5, SUIT.cups), c(6, SUIT.clubs)]), [[0, play(c(4, SUIT.swords))]])
-  assert.deepEqual(chooseAction(view(asPie, 1), DEFAULT_PARAMS, always(0.2)), call(CALL.envido))
+  assert.deepEqual(chooseAction(view(asPie, 1), DEFAULT_PARAMS, always(0.15)), call(CALL.envido))
 })

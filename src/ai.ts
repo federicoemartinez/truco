@@ -3,16 +3,17 @@ import {
 } from './engine.ts'
 import type { Action, Call, Card, Player, PlayerView, Rng } from './engine.ts'
 
-// bluff: chance of lying with a bad hand; aggression: lowers the bar to call and accept;
-// fish: chance of hiding a good envido as mano, to raise when the pie sings it
-export type AiParams = { bluff: number; aggression: number; fish: number }
-export const DEFAULT_PARAMS: AiParams = { bluff: 0.15, aggression: 0.5, fish: 0.4 }
+// envidoBluff: chance of singing envido without points; trucoBluff: chance per turn of a truco or raise
+// without the cards; aggression: lowers the bar to call and accept; fish: chance of hiding a good
+// envido as mano, to raise when the pie sings it
+export type AiParams = { envidoBluff: number; trucoBluff: number; aggression: number; fish: number }
+export const DEFAULT_PARAMS: AiParams = { envidoBluff: 0.09, trucoBluff: 0.09, aggression: 0.5, fish: 0.4 }
 
 // The rivals to pick from; names and mottos live in texts.ts
 export const PROFILES = {
   aristoteles: DEFAULT_PARAMS,
-  ramon: { bluff: 0.35, aggression: 0.75, fish: 0.1 }, // lies a lot and wants everything
-  john: { bluff: 0.01, aggression: 0.25, fish: 0 }, // if he sings, he has it
+  ramon: { envidoBluff: 0.35, trucoBluff: 0.25, aggression: 0.75, fish: 0.1 }, // lies a lot and wants everything
+  john: { envidoBluff: 0.01, trucoBluff: 0.003, aggression: 0.25, fish: 0 }, // if he sings, he has it
 } satisfies Record<string, AiParams>
 export type Rival = keyof typeof PROFILES
 
@@ -40,7 +41,7 @@ function callEnvido(v: PlayerView, params: AiParams, rng: Rng, mayFish: boolean)
   if (points >= 27) return find(v, 'call', CALL.envido)
   // A mano who played without singing is likely short of points: the best moment to lie
   const manoPassed = !mano && v.tricks[0].cards[other(v.me)] !== null
-  if (rng() < params.bluff * (manoPassed ? 2 : 1)) return find(v, 'call', CALL.envido)
+  if (rng() < params.envidoBluff * (manoPassed ? 2 : 1)) return find(v, 'call', CALL.envido)
   return undefined
 }
 
@@ -48,7 +49,7 @@ function respondEnvido(v: PlayerView, params: AiParams, rng: Rng): Action {
   const points = envidoPoints(v.dealt)
   const opp = other(v.me)
   const calls = v.envidoCalls
-  if (points >= 30 || rng() < params.bluff / 3) {
+  if (points >= 30 || rng() < params.envidoBluff / 3) {
     const raise = find(v, 'call', CALL.realEnvido) ?? (points >= 32 ? find(v, 'call', CALL.faltaEnvido) : undefined)
     if (raise) return raise
   }
@@ -69,7 +70,7 @@ function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefine
   if (v.tricks.length === 1 && v.tricks[0].cards[v.me] === null) {
     return rng() < 0.25 && winChance(v, rng) >= 0.9 - 0.2 * params.aggression ? raise : undefined
   }
-  if (winChance(v, rng) >= 0.7 - 0.2 * params.aggression || rng() < params.bluff / 3) return raise
+  if (winChance(v, rng) >= 0.7 - 0.2 * params.aggression || rng() < params.trucoBluff) return raise
   return undefined
 }
 
@@ -78,7 +79,7 @@ function respondTruco(v: PlayerView, params: AiParams, rng: Rng): Action {
   if (envido) return envido
   const chance = winChance(v, rng)
   const raise = trucoCall(v)
-  if (raise && (chance >= 0.85 - 0.2 * params.aggression || rng() < params.bluff / 3)) return raise
+  if (raise && (chance >= 0.85 - 0.2 * params.aggression || rng() < params.trucoBluff)) return raise
   const declineLosesMatch = v.score[other(v.me)] + v.trucoLevel + 1 >= 30
   if (declineLosesMatch || chance >= 0.5 - 0.2 * params.aggression) return find(v, 'accept')!
   return find(v, 'decline')!
@@ -88,7 +89,7 @@ const SAMPLES = 60
 
 // Chance of taking the round: deal the opponent every hand that fits the cards they showed and the envido
 // they declared, and play each one out with both hands face up
-function winChance(v: PlayerView, rng: Rng): number {
+export function winChance(v: PlayerView, rng: Rng): number {
   const opp = other(v.me)
   const shown = v.tricks.flatMap((t) => t.cards[opp] ?? [])
   const pool = newDeck().filter((card) => ![...v.dealt, ...shown].some((seen) => sameCard(seen, card)))

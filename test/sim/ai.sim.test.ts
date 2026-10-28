@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { CALL, apply, envidoPoints, isEnvido, newMatch, seededRng, startRound, view } from '../../src/engine.ts'
 import type { State } from '../../src/engine.ts'
-import { DEFAULT_PARAMS, PROFILES, chooseAction } from '../../src/ai.ts'
+import { DEFAULT_PARAMS, PROFILES, chooseAction, winChance } from '../../src/ai.ts'
 import type { AiParams, Rival } from '../../src/ai.ts'
 
 test('2000 AI vs AI matches: never an illegal move, always finished', () => {
@@ -20,11 +20,13 @@ test('2000 AI vs AI matches: never an illegal move, always finished', () => {
   }
 })
 
-// How a rival plays against Aristóteles: shares of its envido calls that are lies, of its
-// good envidos it keeps quiet as mano, and of its trucos sung before its own first card
+// How a rival plays against Aristóteles: shares of its envido calls that are lies, of its good
+// envidos it keeps quiet as mano, of its trucos sung before its own first card, and of its truco
+// calls and raises made with under 40% chances (lies)
 function habits(params: AiParams, matches = 150) {
   const rng = seededRng(42)
-  const n = { envidos: 0, lies: 0, goodAsMano: 0, fished: 0, trucos: 0, early: 0 }
+  const probe = seededRng(7) // its own stream, so measuring doesn't change the games
+  const n = { envidos: 0, lies: 0, goodAsMano: 0, fished: 0, trucos: 0, early: 0, trucoCalls: 0, trucoLies: 0 }
   for (let m = 0; m < matches; m++) {
     let s: State = newMatch(rng)
     while (s.phase !== 'matchOver') {
@@ -44,6 +46,10 @@ function habits(params: AiParams, matches = 150) {
           n.goodAsMano++
           if (!sings) n.fished++
         }
+        if (a.type === 'call' && !isEnvido(a.call)) {
+          n.trucoCalls++
+          if (winChance(v, probe) < 0.4) n.trucoLies++
+        }
         if (a.type === 'call' && a.call === CALL.truco) {
           n.trucos++
           if (s.tricks.length === 1 && s.tricks[0].cards[0] === null) n.early++
@@ -52,7 +58,7 @@ function habits(params: AiParams, matches = 150) {
       s = apply(s, p, a)
     }
   }
-  return { lies: n.lies / n.envidos, fished: n.fished / n.goodAsMano, early: n.early / n.trucos }
+  return { lies: n.lies / n.envidos, fished: n.fished / n.goodAsMano, early: n.early / n.trucos, trucoLies: n.trucoLies / n.trucoCalls }
 }
 
 test('each rival has its own character', () => {
@@ -60,6 +66,7 @@ test('each rival has its own character', () => {
   console.table(h)
   assert.ok(h.ramon.lies > h.aristoteles.lies && h.aristoteles.lies > h.john.lies, 'Ramón lies the most, John the least')
   assert.ok(h.john.lies < 0.07, 'when John sings, he has it')
+  assert.ok(h.ramon.trucoLies > h.aristoteles.trucoLies && h.aristoteles.trucoLies > h.john.trucoLies, 'same order in the truco')
   assert.equal(h.john.fished, 0, 'John never fishes')
   assert.ok(h.aristoteles.fished > h.ramon.fished, 'Aristóteles fishes more than Ramón')
   for (const [id, x] of Object.entries(h)) assert.ok(x.early < 0.25, `${id} sings ${Math.round(x.early * 100)}% of his trucos before his first card`)
