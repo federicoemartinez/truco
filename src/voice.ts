@@ -1,3 +1,4 @@
+import { CALL } from './engine.ts'
 import type { GameEvent, Player } from './engine.ts'
 import type { Rival } from './ai.ts'
 
@@ -82,6 +83,13 @@ export function say(events: GameEvent[], firstPlayer: Player, voiceOf: (p: Playe
       .catch(console.warn) // a missing clip skips that line, never the rest
       .finally(() => pending--)
   }
+}
+
+// Says "Truco" in that voice to try it out, even when muted: the player asked to hear it
+export function preview(voice: Voice) {
+  unlock()
+  stop()
+  load(CALL.truco).then((buffer) => play(buffer, voice)).catch(console.warn)
 }
 
 function load(name: string): Promise<AudioBuffer> {

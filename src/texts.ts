@@ -1,6 +1,6 @@
 import { REASON } from './engine.ts'
 import type { Call, Card, GameEvent, Player, Suit } from './engine.ts'
-import type { Rival } from './ai.ts'
+import type { AiParams, Rival } from './ai.ts'
 import type { Notebook } from './learn.ts'
 
 export const T = {
@@ -16,6 +16,16 @@ export const T = {
   nextRound: 'Siguiente mano',
   rematch: 'Revancha',
   menu: 'Menú',
+  custom: 'Tu rival',
+  customMotto: 'Armalo a tu gusto',
+  name: 'Nombre',
+  voice: 'Voz',
+  deep: 'Grave',
+  high: 'Aguda',
+  dull: 'Opaca',
+  bright: 'Brillante',
+  listen: 'Escuchar',
+  play: 'Jugar',
   won: (mine: number, theirs: number) => `¡Ganaste ${mine} a ${theirs}!`,
   lost: (rival: string, mine: number, theirs: number) => `Ganó ${rival} ${theirs} a ${mine}`,
   trick: ['1ª', '2ª', '3ª'],
@@ -26,6 +36,16 @@ export const RIVALS: Record<Rival, { name: string; motto: string }> = {
   ramon: { name: 'Ramón Mentirón', motto: 'Miente como respira' },
   john: { name: 'John Bonachón', motto: 'Si canta, es porque tiene' },
   bruno: { name: 'Bruno Aprendiz', motto: 'Te va tomando el tiempo' },
+}
+
+// No hint of what each one does: the player finds out by playing
+export const TRAIT_LABEL: Record<keyof AiParams, string> = {
+  envidoBluff: 'Miente en el envido',
+  trucoBluff: 'Miente en el truco',
+  aggression: 'Agresivo',
+  fish: 'Pesca',
+  slowplay: 'Se hace el muerto',
+  reads: 'Te lee',
 }
 
 const KNOWN_AFTER = 5 // calls seen before Bruno stops sounding unsure
