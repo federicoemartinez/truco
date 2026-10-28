@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  BET, CALL, ENVIDO_CALLS, REASON, apply, cardPower, envidoAcceptedPoints, envidoDeclinedPoints, envidoPoints, faltaPoints, legalActions,
+  BET, CALL, ENVIDO_CALLS, REASON, apply, cardPower, envidoAcceptedPoints, envidoCards, envidoDeclinedPoints, envidoPoints, faltaPoints, legalActions,
   newDeck, newMatch, other, roundWinner, seededRng, shuffle, startRound, view,
 } from '../src/engine.ts'
 import type { EnvidoCall } from '../src/engine.ts'
@@ -321,6 +321,32 @@ test('folding while facing an envido pays the declined envido plus the round', (
   const s = run(setup(MANO_27, PIE_33), [[0, call(CALL.envido)], [1, call(CALL.realEnvido)], [0, FOLD]])
   assert.deepEqual(s.score, [0, 3])
   assert.equal(s.phase, 'roundOver')
+})
+
+test('envidoCards: the pair that scores, else the highest card', () => {
+  assert.deepEqual(envidoCards(PIE_33), [c(6, 'swords'), c(7, 'swords')])
+  assert.deepEqual(envidoCards([c(4, 'swords'), c(6, 'clubs'), c(5, 'cups')]), [c(6, 'clubs')])
+  assert.deepEqual(envidoCards([c(7, 'cups'), c(6, 'cups'), c(5, 'cups')]), [c(7, 'cups'), c(6, 'cups')])
+})
+
+const shown = (log: { type: string }[]) => log.filter((e) => e.type === 'show')
+
+test('the envido winner shows the envido cards still in hand when the round ends', () => {
+  const s = run(setup(MANO_27, PIE_33), [[0, call(CALL.envido)], [1, ACCEPT], [0, play(c(4, 'swords'))], [1, play(c(7, 'swords'))], [1, FOLD]])
+  assert.deepEqual(shown(s.log), [{ type: 'show', player: 1, cards: [c(6, 'swords')] }])
+})
+
+test('nothing to show after a no quiero; whoever said son buenas shows nothing', () => {
+  assert.deepEqual(shown(run(setup(MANO_27, PIE_33), [[0, call(CALL.envido)], [1, DECLINE], [0, FOLD]]).log), [])
+  const s = run(setup(MANO_27, PIE_27), [[0, call(CALL.envido)], [1, ACCEPT], [0, FOLD]])
+  assert.deepEqual(shown(s.log), [{ type: 'show', player: 0, cards: [c(7, 'cups'), c(10, 'cups')] }])
+})
+
+test('an envido that ends the match is shown too', () => {
+  const MANO_33 = [c(7, 'swords'), c(6, 'swords'), c(4, 'cups')]
+  const s = run(setup(MANO_33, PIE_27, { score: [28, 0] }), [[0, call(CALL.envido)], [1, ACCEPT]])
+  assert.equal(s.phase, 'matchOver')
+  assert.deepEqual(shown(s.log), [{ type: 'show', player: 0, cards: [c(7, 'swords'), c(6, 'swords')] }])
 })
 
 test('folding while an envido sits on a truco pays the envido plus 1', () => {

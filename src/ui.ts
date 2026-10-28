@@ -83,7 +83,11 @@ export function renderGame(v: PlayerView) {
     .map((i) => `<div class="trick"><span class="label">${T.trick[i]}</span>${slot(v.tricks[i], opp)}${slot(v.tricks[i], v.me)}</div>`)
     .join('')
 
-  const backs = Array.from({ length: v.opponentHandSize }, (_, k) => `<div class="back${dealCls}"${dealStyle(k)}>${backSvg()}</div>`).join('')
+  // Once the round is over, the envido the opponent won goes face up
+  const show = v.phase === 'playing' ? undefined : v.log.find((e) => e.type === 'show' && e.player === opp)
+  const faceUp = show?.type === 'show' ? show.cards : []
+  const backs = faceUp.map((card) => `<div class="back shown" role="img" aria-label="${cardName(card)}">${cardSvg(card)}</div>`).join('') +
+    Array.from({ length: v.opponentHandSize - faceUp.length }, (_, k) => `<div class="back${dealCls}"${dealStyle(k)}>${backSvg()}</div>`).join('')
 
   const hand = v.hand.map((card, k) => {
     const i = v.legal.findIndex((a) => a.type === 'play' && sameCard(a.card, card))
@@ -121,15 +125,17 @@ export function renderGame(v: PlayerView) {
 
 // A player's latest words since the last card hit the table
 function bubbleText(v: PlayerView, p: Player): string | null {
+  const said: string[] = []
   for (let i = v.log.length - 1; i >= 0; i--) {
     const e = v.log[i]
-    if (e.type === 'play') return null
-    if (e.player === p) {
-      const text = speech(e, v.firstPlayer)
-      if (text) return text
-    }
+    if (e.type === 'play') break
+    const text = e.player === p ? speech(e, v.firstPlayer) : null
+    if (!text) continue
+    said.unshift(text)
+    // Answering an envido and declaring the points happen at once: keep the "¡Quiero!" before the points
+    if (e.type !== 'envidoPoints' && e.type !== 'sonBuenas') break
   }
-  return null
+  return said.length ? said.join(' ') : null
 }
 
 function overlay(v: PlayerView): string {
