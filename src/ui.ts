@@ -1,13 +1,15 @@
 import { other, sameCard } from './engine.ts'
 import type { Action, GameEvent, Player, PlayerView, Trick } from './engine.ts'
 import { SPRITE, backSvg, cardSvg } from './cards.ts'
-import { ACTION_LABEL, CALL_LABEL, RIVALS, RULES_HTML, T, cardName, knowledgeHtml, roundSummary, speech } from './texts.ts'
+import { ACTION_LABEL, CALL_LABEL, RIVALS, RULES_HTML, T, TRAIT_LABEL, cardName, knowledgeHtml, roundSummary, speech } from './texts.ts'
 import type { Notebook } from './learn.ts'
-import type { Rival } from './ai.ts'
-import { isMuted, toggleMute } from './voice.ts'
+import type { AiParams, Rival } from './ai.ts'
+import { BRIGHT, RATE, TRAITS, pointOf, valueAt } from './custom.ts'
+import type { Character } from './custom.ts'
+import { isMuted, preview, toggleMute } from './voice.ts'
 
 export type Handlers = {
-  onStart(rival: Rival): void
+  onStart(rival: Rival | Character): void
   onAction(action: Action): void
   onNextRound(): void
   onRematch(): void
@@ -21,6 +23,8 @@ let current: PlayerView | null = null
 let rivalName = ''
 let lastRender = 0
 let seen = { round: 0, plays: 0, bubbles: [null, null] as (string | null)[] }
+let draft: AiParams // the traits of the rival being built
+let dragging: SVGElement | null = null
 
 export function mount(el: HTMLElement, h: Handlers) {
   root = el
@@ -34,6 +38,13 @@ export function mount(el: HTMLElement, h: Handlers) {
       case 'start': return h.onStart(target!.dataset.rival as Rival)
       case 'rules': return root.querySelector<HTMLDialogElement>('#rules')!.showModal()
       case 'knows': return root.querySelector<HTMLDialogElement>('#knows')!.showModal()
+      case 'custom': return root.querySelector<HTMLDialogElement>('#custom')!.showModal()
+      case 'listen': return preview(built().voice)
+      case 'play': {
+        const rival = built()
+        root.querySelector<HTMLDialogElement>('#custom')!.close()
+        return h.onStart(rival)
+      }
       case 'mute':
         toggleMute()
         target!.outerHTML = muteButton()
@@ -47,10 +58,101 @@ export function mount(el: HTMLElement, h: Handlers) {
       }
     }
   })
+
+  // The hexagon's handles: dragged with a finger or the mouse, or moved with the arrow keys
+  root.addEventListener('pointerdown', (e) => {
+    dragging = (e.target as Element).closest<SVGElement>('.handle')
+    if (!dragging) return
+    dragging.setPointerCapture(e.pointerId)
+    e.preventDefault() // no text selection or scrolling while dragging
+  })
+  root.addEventListener('pointermove', (e) => {
+    if (!dragging) return
+    const k = Number(dragging.dataset.k)
+    const at = new DOMPoint(e.clientX, e.clientY).matrixTransform(dragging.ownerSVGElement!.getScreenCTM()!.inverse())
+    setTrait(k, valueAt(k, at.x, at.y))
+  })
+  const drop = () => (dragging = null)
+  root.addEventListener('pointerup', drop)
+  root.addEventListener('pointercancel', drop)
+  root.addEventListener('keydown', (e) => {
+    const handle = (e.target as Element).closest<SVGElement>('.handle')
+    const step = { ArrowUp: 0.05, ArrowRight: 0.05, ArrowDown: -0.05, ArrowLeft: -0.05, Home: -1, End: 1 }[e.key]
+    if (!handle || step === undefined) return
+    const k = Number(handle.dataset.k)
+    setTrait(k, Math.min(1, Math.max(0, draft[TRAITS[k]] + step)))
+    e.preventDefault()
+  })
 }
 
-export function showMenu(known: Notebook) {
+function setTrait(k: number, value: number) {
+  draft[TRAITS[k]] = value
+  const svg = root.querySelector('.hexagon')!
+  svg.querySelector('.shape')!.setAttribute('points', ring((i) => draft[TRAITS[i]]))
+  const handle = svg.querySelectorAll('.handle')[k]
+  const [x, y] = pointOf(k, value)
+  handle.setAttribute('cx', String(x))
+  handle.setAttribute('cy', String(y))
+  handle.setAttribute('aria-valuenow', String(Math.round(value * 100)))
+}
+
+// The rival as the builder dialog has it now
+function built(): Character {
+  const input = (id: string) => root.querySelector<HTMLInputElement>(`#${id}`)!
+  return {
+    name: input('custom-name').value.trim() || T.custom,
+    params: { ...draft },
+    voice: { rate: Number(input('custom-rate').value), bright: Number(input('custom-bright').value) },
+  }
+}
+
+const ring = (value: (k: number) => number) => TRAITS.map((_, k) => pointOf(k, value(k)).join(',')).join(' ')
+
+function hexagonSvg(p: AiParams): string {
+  const grid = [1 / 3, 2 / 3, 1].map((v) => `<polygon class="grid" points="${ring(() => v)}"/>`).join('')
+  const axes = TRAITS.map((_, k) => `<line class="grid" x1="0" y1="0" x2="${pointOf(k, 1)[0]}" y2="${pointOf(k, 1)[1]}"/>`).join('')
+  const labels = TRAITS.map((t, k) => {
+    const [x, y] = pointOf(k, 1).map((n) => n * 1.22)
+    const side = Math.abs(x) > 1
+    const words = TRAIT_LABEL[t].split(' ')
+    // Labels on the sides go in two lines, so the hexagon fits a phone
+    const half = Math.ceil(words.length / 2)
+    const lines = side && words.length > 2 ? [words.slice(0, half), words.slice(half)] : [words]
+    const anchor = !side ? 'middle' : x > 0 ? 'start' : 'end'
+    const top = y - (lines.length - 1) * 7 + (side ? 4 : y > 0 ? 12 : -4)
+    return `<text x="${x}" y="${top}" text-anchor="${anchor}">${lines.map((l, i) => `<tspan x="${x}" dy="${i ? 14 : 0}">${l.join(' ')}</tspan>`).join('')}</text>`
+  }).join('')
+  const handles = TRAITS.map((t, k) => {
+    const [x, y] = pointOf(k, p[t])
+    return `<circle class="handle" data-k="${k}" cx="${x}" cy="${y}" r="11" tabindex="0" role="slider" aria-label="${TRAIT_LABEL[t]}"
+      aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p[t] * 100)}"/>`
+  }).join('')
+  return `<svg class="hexagon" viewBox="-175 -135 350 270">${grid}${axes}<polygon class="shape" points="${ring((k) => p[TRAITS[k]])}"/>${labels}${handles}</svg>`
+}
+
+function builderHtml(c: Character): string {
+  const knob = (id: string, label: string, range: { min: number; max: number }, step: number, value: number, low: string, high: string) =>
+    `<label class="knob"><span>${low}</span><input type="range" id="${id}" aria-label="${label}" min="${range.min}" max="${range.max}" step="${step}" value="${value}"><span>${high}</span></label>`
+  return `<dialog id="custom" class="builder">
+    <h2>${T.custom}</h2>
+    <label class="name">${T.name} <input id="custom-name" maxlength="24" placeholder="${T.custom}" value="${esc(c.name)}"></label>
+    ${hexagonSvg(c.params)}
+    <fieldset>
+      <legend>${T.voice}</legend>
+      ${knob('custom-rate', `${T.deep} – ${T.high}`, RATE, 0.01, c.voice.rate, T.deep, T.high)}
+      ${knob('custom-bright', `${T.dull} – ${T.bright}`, BRIGHT, 1, c.voice.bright, T.dull, T.bright)}
+      <button type="button" data-do="listen">${T.listen}</button>
+    </fieldset>
+    <div class="row"><button class="primary" data-do="play">${T.play}</button><form method="dialog"><button>${T.close}</button></form></div>
+  </dialog>`
+}
+
+// The player's own rival name ends up in the page: never as markup
+const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => `&#${ch.charCodeAt(0)};`)
+
+export function showMenu(known: Notebook, custom: Character) {
   current = null
+  draft = { ...custom.params }
   lastRender = performance.now()
   seen = { round: 0, plays: 0, bubbles: [null, null] }
   root.innerHTML = `
@@ -60,17 +162,19 @@ export function showMenu(known: Notebook) {
       <p>${T.chooseRival}</p>
       ${Object.entries(RIVALS).map(([id, r], k) => `<button class="rival${k === 0 ? ' primary' : ''}" data-do="start" data-rival="${id}">
         <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
+      <button class="rival" data-do="custom"><strong>${esc(custom.name || T.custom)}</strong><small>${T.customMotto}</small></button>
       <button data-do="rules">${T.rules}</button>
       <button data-do="knows">${T.knows}</button>
       ${muteButton()}
       <dialog id="rules">${RULES_HTML}<form method="dialog"><button>${T.close}</button></form></dialog>
       <dialog id="knows">${knowledgeHtml(known)}<form method="dialog"><button>${T.close}</button></form></dialog>
+      ${builderHtml(custom)}
     </main>`
 }
 
-export function renderGame(v: PlayerView, rival: Rival) {
+export function renderGame(v: PlayerView, name: string) {
   current = v
-  rivalName = RIVALS[rival].name
+  rivalName = esc(name)
   lastRender = performance.now()
   const opp = other(v.me)
   const newRound = v.round !== seen.round
