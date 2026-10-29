@@ -149,39 +149,41 @@ export const LUCK_LEVELS: LuckLevel[] = Object.values(LUCK) // worst to best
 export type Luck = { player: Player; level: LuckLevel } | null
 
 type Tier = (card: Card) => boolean
+type Slot = [Tier, number] | undefined // undefined: a plain draw
 const TOP_12: Tier = (card) => cardPower(card) >= 9 // the 4 bravas, the 3s and the 2s
 const TOP_18: Tier = (card) => cardPower(card) >= 7 // through the 12s
-const BOTTOM_12: Tier = (card) => cardPower(card) <= 3 // the 4s, 5s and 6s
-const BOTTOM_18: Tier = (card) => cardPower(card) <= 5 // through the 10s
-const ENVIDO_TIER = 12 // the third card is any of the 12 that leave the best (worst) envido, not always the best
+const ENVIDO_TIER = 12 // the envido card is any of the 12 that leave the best (worst) envido, not always the best
 
-// Each of the first cards lands in its tier with that chance, else outside it, so a chance below the
-// tier's share of the deck (30% for 12, 45% for 18) pushes the other way. The third card, with its chance,
-// gives the best or worst envido. Tuned on AI vs AI matches to win about 19/37/48/67/85% of them
-const LUCK_DEALS: Record<LuckLevel, { cards: [Tier, number][]; envido: ['best' | 'worst', number] | null }> = {
-  cursed: { cards: [[BOTTOM_12, 0.45], [BOTTOM_12, 0.45]], envido: ['worst', 0.5] },
-  unlucky: { cards: [[BOTTOM_18, 0.55]], envido: ['worst', 0.25] },
+// Each card lands in its tier with that chance, else outside it. The third card, with the envido chance,
+// gives instead the best or worst envido. The extremes are meant to show at the table (a brava, a 3 or a 2
+// in about 27% of the cursed hands and two of them in 66% of the blessed ones, against 67% and 21%); the
+// middle levels are subtler. Tuned on AI vs AI matches to win about 3/27/48/67/96% of them
+const LUCK_DEALS: Record<LuckLevel, { cards: Slot[]; envido: ['best' | 'worst', number] | null }> = {
+  cursed: { cards: [[TOP_12, 0.12], [TOP_12, 0.12], [TOP_12, 0.12]], envido: ['worst', 0.5] },
+  unlucky: { cards: [[TOP_12, 0.27], [TOP_12, 0.27], [TOP_12, 0.27]], envido: ['worst', 0.25] },
   balanced: { cards: [], envido: null },
   lucky: { cards: [[TOP_12, 0.5], [TOP_18, 0.5]], envido: ['best', 0.25] },
-  blessed: { cards: [[TOP_12, 0.5], [TOP_12, 0.5]], envido: ['best', 0.45] },
+  blessed: { cards: [[TOP_12, 0.75], [TOP_12, 0.75]], envido: ['best', 0.45] },
 }
 
 // Takes the 3 cards out of the shuffled deck
 function luckyHand(level: LuckLevel, deck: Card[], rng: Rng): Card[] {
   const { cards, envido } = LUCK_DEALS[level]
   const take = (i: number) => deck.splice(i, 1)[0]
-  const hand = cards.map(([inTier, chance]) => {
-    const want = rng() < chance
-    return take(deck.findIndex((card) => inTier(card) === want))
-  })
-  while (hand.length < 2) hand.push(take(0))
-  let third = 0
-  if (envido && rng() < envido[1]) {
-    const sign = envido[0] === 'best' ? -1 : 1
-    const ranked = deck.map((card, i) => ({ i, points: envidoPoints([...hand, card]) })).sort((a, b) => sign * (a.points - b.points))
-    third = ranked[Math.floor(rng() * ENVIDO_TIER)].i
+  const pick = (slot: Slot) => {
+    if (!slot) return 0
+    const want = rng() < slot[1]
+    return deck.findIndex((card) => slot[0](card) === want)
   }
-  hand.push(take(third))
+  const hand = [take(pick(cards[0])), take(pick(cards[1]))]
+  if (envido && rng() < envido[1]) {
+    const best = envido[0] === 'best'
+    const ranked = deck
+      .map((card, i) => ({ card, i, points: envidoPoints([...hand, card]) }))
+      .filter(({ card }) => best || !TOP_12(card)) // the 1s, 2s and 3s add little envido: no bravas as bad luck
+      .sort((a, b) => (best ? b.points - a.points : a.points - b.points))
+    hand.push(take(ranked[Math.floor(rng() * ENVIDO_TIER)].i))
+  } else hand.push(take(pick(cards[2])))
   return hand
 }
 

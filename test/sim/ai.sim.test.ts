@@ -73,7 +73,7 @@ test('each rival has its own character', () => {
 })
 
 // Two equal AIs, one with the luck: each level wins clearly more often than the one below (tuned to about
-// 19/37/48/67/85%; 300 matches leave about ±3 points of noise, the gaps are 11 or more)
+// 3/27/48/67/96%; 300 matches leave about ±3 points of noise, the gaps are 19 or more)
 test('the luckier the CPU, the more matches it wins', () => {
   const rates = LUCK_LEVELS.map((level) => {
     const rng = seededRng(123)

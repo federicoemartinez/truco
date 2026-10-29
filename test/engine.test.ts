@@ -4,7 +4,7 @@ import {
   BET, CALL, ENVIDO_CALLS, LUCK, LUCK_LEVELS, REASON, SUIT, apply, cardPower, envidoAcceptedPoints, envidoCards, envidoDeclinedPoints, envidoPoints,
   faltaPoints, legalActions, newDeck, newMatch, other, roundWinner, seededRng, shuffle, startRound, view,
 } from '../src/engine.ts'
-import type { EnvidoCall } from '../src/engine.ts'
+import type { EnvidoCall, LuckLevel } from '../src/engine.ts'
 import { ACCEPT, DECLINE, FOLD, c, call, has, play, run, setup } from './helpers.ts'
 
 test('the deck has 40 distinct cards without 8s and 9s', () => {
@@ -133,6 +133,19 @@ test('the luckier the level, the stronger the lucky hand, at the truco and at th
     assert.ok(averages[k].power > averages[k - 1].power, `${averages[k].level} truco`)
     assert.ok(averages[k].envido > averages[k - 1].envido, `${averages[k].level} envido`)
   }
+})
+
+test('the extremes show: a brava, a 3 or a 2 is rare when cursed, and comes in pairs when blessed', () => {
+  const rng = seededRng(8)
+  const share = (level: LuckLevel, atLeast: number) => {
+    let n = 0
+    for (let i = 0; i < 4000; i++) if (newMatch(rng, { player: 1, level }).dealt[1].filter((k) => cardPower(k) >= 9).length >= atLeast) n++
+    return n / 4000
+  }
+  assert.ok(share(LUCK.cursed, 1) < 0.35) // about 27%, against 67% balanced
+  assert.ok(share(LUCK.balanced, 1) > 0.6)
+  assert.ok(share(LUCK.blessed, 2) > 0.55) // about 66%, against 21% balanced
+  assert.ok(share(LUCK.balanced, 2) < 0.3)
 })
 
 test('balanced luck deals just like no luck', () => {
