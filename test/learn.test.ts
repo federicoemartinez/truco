@@ -54,6 +54,11 @@ test('a truco sung with nothing, once its cards came to light, is a lie seen', (
   assert.deepEqual([nb.trucoCalls, nb.trucoBluffs], [1, 1])
 })
 
+test('a weak truco is not a lie when the CPU was one point from the match: anyone would sing it', () => {
+  const { nb } = playRound(setup(WEAK, CPU_HAND, { envidoDone: true, score: [10, 29] }), thirdTrickTruco(c(6, SUIT.cups)))
+  assert.deepEqual([nb.trucoCalls, nb.trucoBluffs], [0, 0])
+})
+
 test('a truco sung with the ancho de espada is not a lie', () => {
   const human = [c(4, SUIT.swords), c(5, SUIT.clubs), c(1, SUIT.swords)]
   const { nb } = playRound(setup(human, CPU_HAND, { envidoDone: true }), thirdTrickTruco(c(1, SUIT.swords)))

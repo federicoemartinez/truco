@@ -1,6 +1,6 @@
 import { envidoPoints, isEnvido, other, sameCard } from './engine.ts'
 import type { Action, Card, PlayerView, Rng } from './engine.ts'
-import { PRIOR_READ, winChance } from './ai.ts'
+import { PRIOR_READ, lastStand, winChance } from './ai.ts'
 import type { Read } from './ai.ts'
 
 // What the AI has seen of its rival. Only public information: the cards the rival played or showed,
@@ -25,9 +25,10 @@ export function readOf(nb: Notebook): Read {
   }
 }
 
-// Right before the rival's action is applied: keep the AI's view when it is a truco call or raise
+// Right before the rival's action is applied: keep the AI's view when it is a truco call or raise,
+// unless the rival had nothing to lose by it
 export function noteCall(nb: Notebook, seenByAi: PlayerView, action: Action): Notebook {
-  if (action.type !== 'call' || isEnvido(action.call)) return nb
+  if (action.type !== 'call' || isEnvido(action.call) || lastStand(seenByAi, other(seenByAi.me))) return nb
   return { ...nb, pending: [...nb.pending, seenByAi] }
 }
 
