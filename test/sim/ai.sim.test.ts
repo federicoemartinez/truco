@@ -1,7 +1,7 @@
 // Slow: thousands of AI matches. Run with `npm run test:sim`, not part of `npm test`
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CALL, apply, envidoPoints, isEnvido, newMatch, seededRng, startRound, view } from '../../src/engine.ts'
+import { CALL, LUCK_LEVELS, apply, envidoPoints, isEnvido, newMatch, seededRng, startRound, view } from '../../src/engine.ts'
 import type { State } from '../../src/engine.ts'
 import { DEFAULT_PARAMS, PROFILES, chooseAction, winChance } from '../../src/ai.ts'
 import type { AiParams, Rival } from '../../src/ai.ts'
@@ -70,4 +70,22 @@ test('each rival has its own character', () => {
   assert.equal(h.john.fished, 0, 'John never fishes')
   assert.ok(h.aristoteles.fished > h.ramon.fished, 'Aristóteles fishes more than Ramón')
   for (const [id, x] of Object.entries(h)) assert.ok(x.early < 0.25, `${id} sings ${Math.round(x.early * 100)}% of his trucos before his first card`)
+})
+
+// Two equal AIs, one with the luck: each level wins clearly more often than the one below (tuned to about
+// 3/27/48/67/96%; 300 matches leave about ±3 points of noise, the gaps are 19 or more)
+test('the luckier the CPU, the more matches it wins', () => {
+  const rates = LUCK_LEVELS.map((level) => {
+    const rng = seededRng(123)
+    let wins = 0
+    for (let m = 0; m < 300; m++) {
+      let s = newMatch(rng, { player: 1, level })
+      while (s.phase !== 'matchOver') {
+        s = s.phase === 'roundOver' ? startRound(s, rng) : apply(s, s.turn, chooseAction(view(s, s.turn), DEFAULT_PARAMS, rng))
+      }
+      if (s.winner === 1) wins++
+    }
+    return wins / 300
+  })
+  for (let k = 1; k < rates.length; k++) assert.ok(rates[k] > rates[k - 1] + 0.05, `${LUCK_LEVELS[k]}: ${rates.map((r) => r.toFixed(2))}`)
 })

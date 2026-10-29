@@ -128,6 +128,7 @@ export type State = {
   phase: 'playing' | 'roundOver' | 'matchOver'
   winner: Player | null
   log: GameEvent[] // this round's events, for the UI
+  luck: Luck // how one player's cards are dealt, the whole match
 }
 
 // What one player may know: never the opponent's cards
@@ -141,9 +142,59 @@ export type PlayerView = Omit<State, 'dealt' | 'hands'> & {
 
 export const WIN = 30
 
-function deal(round: number, score: [number, number], firstPlayer: Player, rng: Rng): State {
+// How lucky one player is with the cards: a difficulty the player picks for the CPU
+export const LUCK = { cursed: 'cursed', unlucky: 'unlucky', balanced: 'balanced', lucky: 'lucky', blessed: 'blessed' } as const
+export type LuckLevel = (typeof LUCK)[keyof typeof LUCK]
+export const LUCK_LEVELS: LuckLevel[] = Object.values(LUCK) // worst to best
+export type Luck = { player: Player; level: LuckLevel } | null
+
+type Tier = (card: Card) => boolean
+type Slot = [Tier, number] | undefined // undefined: a plain draw
+const TOP_12: Tier = (card) => cardPower(card) >= 9 // the 4 bravas, the 3s and the 2s
+const TOP_18: Tier = (card) => cardPower(card) >= 7 // through the 12s
+const ENVIDO_TIER = 12 // the envido card is any of the 12 that leave the best (worst) envido, not always the best
+
+// Each card lands in its tier with that chance, else outside it. The third card, with the envido chance,
+// gives instead the best or worst envido. The extremes are meant to show at the table (a brava, a 3 or a 2
+// in about 27% of the cursed hands and two of them in 66% of the blessed ones, against 67% and 21%); the
+// middle levels are subtler. Tuned on AI vs AI matches to win about 3/27/48/67/96% of them
+const LUCK_DEALS: Record<LuckLevel, { cards: Slot[]; envido: ['best' | 'worst', number] | null }> = {
+  cursed: { cards: [[TOP_12, 0.12], [TOP_12, 0.12], [TOP_12, 0.12]], envido: ['worst', 0.5] },
+  unlucky: { cards: [[TOP_12, 0.27], [TOP_12, 0.27], [TOP_12, 0.27]], envido: ['worst', 0.25] },
+  balanced: { cards: [], envido: null },
+  lucky: { cards: [[TOP_12, 0.5], [TOP_18, 0.5]], envido: ['best', 0.25] },
+  blessed: { cards: [[TOP_12, 0.75], [TOP_12, 0.75]], envido: ['best', 0.45] },
+}
+
+// Takes the 3 cards out of the shuffled deck
+function luckyHand(level: LuckLevel, deck: Card[], rng: Rng): Card[] {
+  const { cards, envido } = LUCK_DEALS[level]
+  const take = (i: number) => deck.splice(i, 1)[0]
+  const pick = (slot: Slot) => {
+    if (!slot) return 0
+    const want = rng() < slot[1]
+    return deck.findIndex((card) => slot[0](card) === want)
+  }
+  const hand = [take(pick(cards[0])), take(pick(cards[1]))]
+  if (envido && rng() < envido[1]) {
+    const best = envido[0] === 'best'
+    const ranked = deck
+      .map((card, i) => ({ card, i, points: envidoPoints([...hand, card]) }))
+      .filter(({ card }) => best || !TOP_12(card)) // the 1s, 2s and 3s add little envido: no bravas as bad luck
+      .sort((a, b) => (best ? b.points - a.points : a.points - b.points))
+    hand.push(take(ranked[Math.floor(rng() * ENVIDO_TIER)].i))
+  } else hand.push(take(pick(cards[2])))
+  return hand
+}
+
+function deal(round: number, score: [number, number], firstPlayer: Player, luck: Luck, rng: Rng): State {
   const deck = shuffle(newDeck(), rng)
   const dealt: [Card[], Card[]] = [deck.slice(0, 3), deck.slice(3, 6)]
+  if (luck && luck.level !== LUCK.balanced) {
+    // The lucky hand goes first, so the other one is a plain draw from what's left, just as the AI assumes
+    dealt[luck.player] = luckyHand(luck.level, deck, rng)
+    dealt[other(luck.player)] = deck.slice(0, 3)
+  }
   return {
     round,
     score,
@@ -161,16 +212,17 @@ function deal(round: number, score: [number, number], firstPlayer: Player, rng: 
     phase: 'playing',
     winner: null,
     log: [],
+    luck,
   }
 }
 
-export function newMatch(rng: Rng): State {
-  return deal(1, [0, 0], rng() < 0.5 ? 0 : 1, rng)
+export function newMatch(rng: Rng, luck: Luck = null): State {
+  return deal(1, [0, 0], rng() < 0.5 ? 0 : 1, luck, rng)
 }
 
 export function startRound(state: State, rng: Rng): State {
   if (state.phase !== 'roundOver') throw new Error('startRound: the round is not over')
-  return deal(state.round + 1, [state.score[0], state.score[1]], other(state.firstPlayer), rng)
+  return deal(state.round + 1, [state.score[0], state.score[1]], other(state.firstPlayer), state.luck, rng)
 }
 
 const ENVIDO_VALUE: Record<EnvidoCall, number> = { envido: 2, realEnvido: 3, faltaEnvido: 0 } // falta depends on the score

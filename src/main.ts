@@ -1,5 +1,5 @@
-import { apply, newMatch, startRound, view } from './engine.ts'
-import type { Action, Player, State } from './engine.ts'
+import { LUCK, LUCK_LEVELS, apply, newMatch, startRound, view } from './engine.ts'
+import type { Action, LuckLevel, Player, State } from './engine.ts'
 import { PROFILES, chooseAction } from './ai.ts'
 import { fromSaved as characterFromSaved } from './custom.ts'
 import type { Character } from './custom.ts'
@@ -24,6 +24,11 @@ let notebook: Notebook = fromSaved(load(NOTEBOOK_KEY))
 // The rival the player built, kept for the next visit
 const CUSTOM_KEY = 'truco:custom'
 let custom: Character = characterFromSaved(load(CUSTOM_KEY))
+
+// How lucky the CPU is with the cards: the difficulty the player picked last
+const LUCK_KEY = 'truco:luck'
+const savedLuck = load(LUCK_KEY)
+let luck: LuckLevel = LUCK_LEVELS.find((level) => level === savedLuck) ?? LUCK.balanced
 
 function load(key: string): string | null {
   try {
@@ -85,7 +90,7 @@ function cpuMove(waited = 0) {
 function startMatch() {
   clearTimeout(cpuTimer)
   voice.stop()
-  state = newMatch(Math.random)
+  state = newMatch(Math.random, { player: CPU, level: luck })
   notebook = { ...notebook, pending: [] } // calls noted in a round left halfway
   portal.setPlaying(true)
   update()
@@ -101,6 +106,10 @@ mount(document.getElementById('app')!, {
       save(CUSTOM_KEY, JSON.stringify(custom))
     }
     startMatch()
+  },
+  onLuck: (level) => {
+    luck = level
+    save(LUCK_KEY, luck)
   },
   onAction: (action) => {
     notebook = noteCall(notebook, view(state, CPU), action)
@@ -120,8 +129,8 @@ mount(document.getElementById('app')!, {
     clearTimeout(cpuTimer)
     voice.stop()
     portal.setPlaying(false)
-    showMenu(notebook, custom)
+    showMenu(notebook, custom, luck)
   },
 })
-showMenu(notebook, custom)
+showMenu(notebook, custom, luck)
 portal.init()
