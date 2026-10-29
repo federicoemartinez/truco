@@ -1,5 +1,5 @@
 import {
-  BET, CALL, cardPower, envidoDeclinedPoints, envidoPoints, faltaPoints, isEnvido, newDeck, other, roundWinner, sameCard, shuffle, trickWinner,
+  BET, CALL, WIN, cardPower, envidoDeclinedPoints, envidoPoints, faltaPoints, isEnvido, newDeck, other, roundWinner, sameCard, shuffle, trickWinner,
 } from './engine.ts'
 import type { Action, Call, Card, Player, PlayerView, Rng } from './engine.ts'
 
@@ -56,6 +56,9 @@ function respondEnvido(v: PlayerView, params: AiParams, rng: Rng, read: Read): A
   const points = envidoPoints(v.dealt)
   const opp = other(v.me)
   const calls = v.envidoCalls
+  // One point from the match: the falta wins it for us and costs no more than a no quiero
+  const falta = find(v, 'call', CALL.faltaEnvido)
+  if (falta && v.score[v.me] + faltaPoints(v.score, v.me) >= WIN && faltaPoints(v.score, opp) <= envidoDeclinedPoints(calls)) return falta
   if (points >= 30 || rng() < params.envidoBluff / 3) {
     const raise = find(v, 'call', CALL.realEnvido) ?? (points >= 32 ? find(v, 'call', CALL.faltaEnvido) : undefined)
     if (raise) return raise
@@ -76,6 +79,7 @@ function respondEnvido(v: PlayerView, params: AiParams, rng: Rng, read: Read): A
 function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefined {
   const raise = trucoCall(v)
   if (!raise) return undefined
+  if (lastStand(v, v.me)) return raise
   // Hardly anyone sings truco before playing a card: even with a sure hand it pays to wait for the first
   // trick, so only now and then, and never as a bluff
   if (v.tricks.length === 1 && v.tricks[0].cards[v.me] === null) {
@@ -90,11 +94,18 @@ function respondTruco(v: PlayerView, params: AiParams, rng: Rng, read: Read): Ac
   if (envido) return envido
   const chance = winChance(v, rng)
   const raise = trucoCall(v)
-  if (raise && (chance >= 0.85 - 0.2 * params.aggression || bluffs(v, params, rng))) return raise
-  const declineLosesMatch = v.score[other(v.me)] + v.trucoLevel + 1 >= 30
+  if (raise && (lastStand(v, v.me) || chance >= 0.85 - 0.2 * params.aggression || bluffs(v, params, rng))) return raise
+  const declineLosesMatch = v.score[other(v.me)] + v.trucoLevel + 1 >= WIN
   const distrust = params.reads * (read.trucoBluff - PRIOR_READ.trucoBluff) // see respondEnvido
   if (declineLosesMatch || chance >= 0.5 - 0.2 * params.aggression - 0.4 * distrust) return find(v, 'accept')!
   return find(v, 'decline')!
+}
+
+// Perdido por perdido: if losing this round (worth one more once a pending truco is accepted) hands p's rival
+// the match, a truco or raise costs p nothing and a no quiero saves it. Not a bluff: anyone would sing
+export function lastStand(v: PlayerView, p: Player): boolean {
+  const pendingTruco = v.pending.at(-1)?.kind === BET.truco
+  return v.score[other(p)] + v.trucoLevel + (pendingTruco ? 2 : 1) >= WIN
 }
 
 const SAMPLES = 60

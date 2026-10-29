@@ -46,6 +46,26 @@ test('the AI accepts when a no quiero would hand over the match', () => {
   }
 })
 
+test('with the human one point from the match, the AI sings truco with a lost hand instead of folding', () => {
+  const human = [c(4, SUIT.coins), c(3, SUIT.swords), c(1, SUIT.swords)]
+  const cpu = [c(5, SUIT.clubs), c(6, SUIT.cups), c(4, SUIT.swords)]
+  const s = run(setup(human, cpu, { envidoDone: true, score: [29, 20] }), [
+    [0, play(c(4, SUIT.coins))], [1, play(c(5, SUIT.clubs))],
+    [1, play(c(6, SUIT.cups))], [0, play(c(3, SUIT.swords))],
+    [0, play(c(1, SUIT.swords))],
+  ])
+  for (let seed = 1; seed <= 200; seed++) {
+    assert.deepEqual(chooseAction(view(s, 1), PROFILES.john, seededRng(seed)), call(CALL.truco))
+  }
+})
+
+test('one point from the match, the AI answers an envido with the falta, worth a single point', () => {
+  const s = run(setup([c(7, SUIT.swords), c(6, SUIT.swords), c(4, SUIT.cups)], WEAK, { score: [20, 29] }), [[0, call(CALL.envido)]])
+  for (let seed = 1; seed <= 200; seed++) {
+    assert.deepEqual(chooseAction(view(s, 1), DEFAULT_PARAMS, seededRng(seed)), call(CALL.faltaEnvido))
+  }
+})
+
 test('with two 4s left after losing the first trick the AI does not want the vale cuatro', () => {
   const human = [c(11, SUIT.swords), c(7, SUIT.swords), c(12, SUIT.cups)]
   const cpu = [c(4, SUIT.clubs), c(4, SUIT.cups), c(5, SUIT.coins)]
