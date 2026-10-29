@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  BET, CALL, ENVIDO_CALLS, REASON, SUIT, apply, cardPower, envidoAcceptedPoints, envidoCards, envidoDeclinedPoints, envidoPoints,
+  BET, CALL, ENVIDO_CALLS, LUCK, LUCK_LEVELS, REASON, SUIT, apply, cardPower, envidoAcceptedPoints, envidoCards, envidoDeclinedPoints, envidoPoints,
   faltaPoints, legalActions, newDeck, newMatch, other, roundWinner, seededRng, shuffle, startRound, view,
 } from '../src/engine.ts'
 import type { EnvidoCall } from '../src/engine.ts'
@@ -102,6 +102,41 @@ test('startRound keeps the score, counts rounds and alternates the mano', () => 
   assert.equal(next.round, s.round + 1)
   assert.equal(next.hands[0].length, 3)
   assert.equal(next.log.length, 0)
+})
+
+test('every luck deals 6 different cards, and the next round keeps it', () => {
+  const rng = seededRng(5)
+  for (const level of LUCK_LEVELS) {
+    for (let i = 0; i < 200; i++) {
+      const s = newMatch(rng, { player: 1, level })
+      const all = [...s.hands[0], ...s.hands[1]].map((k) => `${k.rank}-${k.suit}`)
+      assert.equal(new Set(all).size, 6)
+    }
+    const s = newMatch(rng, { player: 1, level })
+    assert.deepEqual(startRound(run(s, [[s.turn, FOLD]]), rng).luck, { player: 1, level })
+  }
+})
+
+test('the luckier the level, the stronger the lucky hand, at the truco and at the envido', () => {
+  const rng = seededRng(6)
+  const averages = LUCK_LEVELS.map((level) => {
+    let power = 0
+    let envido = 0
+    for (let i = 0; i < 4000; i++) {
+      const hand = newMatch(rng, { player: 1, level }).dealt[1]
+      power += hand.reduce((sum, k) => sum + cardPower(k), 0)
+      envido += envidoPoints(hand)
+    }
+    return { level, power, envido }
+  })
+  for (let k = 1; k < averages.length; k++) {
+    assert.ok(averages[k].power > averages[k - 1].power, `${averages[k].level} truco`)
+    assert.ok(averages[k].envido > averages[k - 1].envido, `${averages[k].level} envido`)
+  }
+})
+
+test('balanced luck deals just like no luck', () => {
+  assert.deepEqual(newMatch(seededRng(7), { player: 1, level: LUCK.balanced }).dealt, newMatch(seededRng(7)).dealt)
 })
 
 test('startRound refuses while the round is being played', () => {

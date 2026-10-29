@@ -1,7 +1,7 @@
-import { other, sameCard } from './engine.ts'
-import type { Action, GameEvent, Player, PlayerView, Trick } from './engine.ts'
+import { LUCK_LEVELS, other, sameCard } from './engine.ts'
+import type { Action, GameEvent, LuckLevel, Player, PlayerView, Trick } from './engine.ts'
 import { SPRITE, backSvg, cardSvg } from './cards.ts'
-import { ACTION_LABEL, CALL_LABEL, RIVALS, RULES_HTML, T, TRAIT_LABEL, cardName, knowledgeHtml, roundSummary, speech } from './texts.ts'
+import { ACTION_LABEL, CALL_LABEL, LUCK_LABEL, RIVALS, RULES_HTML, T, TRAIT_LABEL, cardName, knowledgeHtml, roundSummary, speech } from './texts.ts'
 import type { Notebook } from './learn.ts'
 import type { AiParams, Rival } from './ai.ts'
 import { BRIGHT, RATE, TRAITS, pointOf, valueAt } from './custom.ts'
@@ -10,6 +10,7 @@ import { isMuted, preview, toggleMute } from './voice.ts'
 
 export type Handlers = {
   onStart(rival: Rival | Character): void
+  onLuck(level: LuckLevel): void
   onAction(action: Action): void
   onNextRound(): void
   onRematch(): void
@@ -57,6 +58,11 @@ export function mount(el: HTMLElement, h: Handlers) {
         if (action) h.onAction(action)
       }
     }
+  })
+
+  root.addEventListener('change', (e) => {
+    const select = e.target as HTMLSelectElement
+    if (select.id === 'luck') h.onLuck(select.value as LuckLevel)
   })
 
   // The hexagon's handles: dragged with a finger or the mouse, or moved with the arrow keys
@@ -150,7 +156,7 @@ function builderHtml(c: Character): string {
 // The player's own rival name ends up in the page: never as markup
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => `&#${ch.charCodeAt(0)};`)
 
-export function showMenu(known: Notebook, custom: Character) {
+export function showMenu(known: Notebook, custom: Character, luck: LuckLevel) {
   current = null
   draft = { ...custom.params }
   lastRender = performance.now()
@@ -163,6 +169,8 @@ export function showMenu(known: Notebook, custom: Character) {
       ${Object.entries(RIVALS).map(([id, r], k) => `<button class="rival${k === 0 ? ' primary' : ''}" data-do="start" data-rival="${id}">
         <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
       <button class="rival" data-do="custom"><strong>${esc(custom.name || T.custom)}</strong><small>${T.customMotto}</small></button>
+      <label class="luck">${T.luck} <select id="luck">${LUCK_LEVELS.map((level) =>
+        `<option value="${level}"${level === luck ? ' selected' : ''}>${LUCK_LABEL[level]}</option>`).join('')}</select></label>
       <button data-do="rules">${T.rules}</button>
       <button data-do="knows">${T.knows}</button>
       ${muteButton()}

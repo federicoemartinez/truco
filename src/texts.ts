@@ -1,5 +1,5 @@
 import { REASON } from './engine.ts'
-import type { Call, Card, GameEvent, Player, Suit } from './engine.ts'
+import type { Call, Card, GameEvent, LuckLevel, Player, Suit } from './engine.ts'
 import type { AiParams, Rival } from './ai.ts'
 import type { Notebook } from './learn.ts'
 
@@ -26,6 +26,7 @@ export const T = {
   bright: 'Brillante',
   listen: 'Escuchar',
   play: 'Jugar',
+  luck: 'Suerte del rival',
   won: (mine: number, theirs: number) => `¡Ganaste ${mine} a ${theirs}!`,
   lost: (rival: string, mine: number, theirs: number) => `Ganó ${rival} ${theirs} a ${mine}`,
   trick: ['1ª', '2ª', '3ª'],
@@ -36,6 +37,14 @@ export const RIVALS: Record<Rival, { name: string; motto: string }> = {
   ramon: { name: 'Ramón Mentirón', motto: 'Miente como respira' },
   john: { name: 'John Bonachón', motto: 'Si canta, es porque tiene' },
   bruno: { name: 'Bruno Aprendiz', motto: 'Te va tomando el tiempo' },
+}
+
+export const LUCK_LABEL: Record<LuckLevel, string> = {
+  cursed: 'Ni para mentir',
+  unlucky: 'Liga poco',
+  balanced: 'Balanceado',
+  lucky: 'Liga mucho',
+  blessed: 'Más culo que cabeza',
 }
 
 // No hint of what each one does: the player finds out by playing
