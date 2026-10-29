@@ -38,4 +38,8 @@ test('what Bruno knows of the player: plain counts, and how sure he is', () => {
   const early = knowledgeHtml({ ...newNotebook(), trucoCalls: 2, trucoBluffs: 1 })
   assert.match(early, /Envido:<\/strong> todavía no te vio cantar\./)
   assert.match(early, /Todavía te está conociendo/)
+  const suspects = knowledgeHtml({ ...newNotebook(), trucoCalls: 11, trucoBluffs: 3, peekedTrucoCalls: 2, peekedTrucoBluffs: 1, peekedEnvidoCalls: 1, peekedEnvidoBluffs: 1 })
+  assert.match(suspects, /Truco:<\/strong> te vio cantar 11 veces y mentiste en 3, pero sospecha que mentiste más veces\./)
+  assert.match(suspects, /Envido:<\/strong> todavía no te vio cantar, pero sospecha que mentiste\./)
+  assert.doesNotMatch(knowledgeHtml({ ...newNotebook(), trucoCalls: 4, peekedTrucoCalls: 3 }), /sospecha/) // peeked calls without a lie add nothing
 })

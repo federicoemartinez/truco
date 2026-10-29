@@ -19,7 +19,7 @@ function winRate(me: AiParams, rival: AiParams): number {
     nb = { ...nb, pending: [] }
     while (true) {
       if (s.phase !== 'playing') {
-        nb = learnFromRound(nb, view(s, 1), rng)
+        nb = learnFromRound(nb, view(s, 1), s.dealt[0], rng)
         if (s.phase === 'matchOver') break
         s = startRound(s, rng)
         continue

@@ -48,7 +48,7 @@ function save(key: string, value: string) {
 
 function learn() {
   try {
-    notebook = learnFromRound(notebook, view(state, CPU), Math.random)
+    notebook = learnFromRound(notebook, view(state, CPU), state.dealt[HUMAN], Math.random) // the round is over: peeking is fair
   } catch (err) {
     console.error(err) // never leave the round-over screen stuck on a learning bug
     return

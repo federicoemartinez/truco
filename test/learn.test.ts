@@ -17,7 +17,7 @@ function playRound(s: State, steps: [Player, Action][]): { s: State; nb: Noteboo
     if (p === HUMAN) nb = noteCall(nb, view(s, CPU), a)
     s = apply(s, p, a)
   }
-  return { s, nb: learnFromRound(nb, view(s, CPU), seededRng(1)) }
+  return { s, nb: learnFromRound(nb, view(s, CPU), s.dealt[HUMAN], seededRng(1)) }
 }
 
 const WEAK = [c(4, SUIT.swords), c(5, SUIT.clubs), c(6, SUIT.cups)]
@@ -65,9 +65,16 @@ test('a truco sung with the ancho de espada is not a lie', () => {
   assert.deepEqual([nb.trucoCalls, nb.trucoBluffs], [1, 0])
 })
 
-test('a truco whose cards never came to light teaches nothing', () => {
+test('a truco whose cards never came to light is judged by peeking at them once the round is over', () => {
   const { nb } = playRound(setup(WEAK, CPU_HAND, { envidoDone: true }), [[0, call(CALL.truco)], [1, { type: 'decline' }]])
   assert.deepEqual([nb.trucoCalls, nb.trucoBluffs, nb.pending.length], [0, 0, 0])
+  assert.deepEqual([nb.peekedTrucoCalls, nb.peekedTrucoBluffs], [1, 1])
+  assert.ok(readOf(nb).trucoBluff > PRIOR_READ.trucoBluff)
+})
+
+test('an envido the CPU didn\'t want is judged by peeking at the points', () => {
+  const { nb } = playRound(setup(WEAK, CPU_HAND), [[0, call(CALL.envido)], [1, { type: 'decline' }]])
+  assert.deepEqual([nb.envidoCalls, nb.peekedEnvidoCalls, nb.peekedEnvidoBluffs], [0, 1, 1])
 })
 
 // 1-1 going into the 3rd trick, which the CPU leads with its 12: the human's 5 can't beat it
@@ -83,11 +90,11 @@ test('a truco sung on the last card, facing the CPU\'s card, then the deck: a li
   assert.deepEqual([nb.trucoCalls, nb.trucoBluffs], [1, 1])
 })
 
-test('a truco sung earlier, then the deck, still teaches nothing', () => {
+test('a truco sung earlier, then the deck, is only peeked', () => {
   const { nb } = playRound(setup(HUMAN_ONE_ONE, CPU_HAND, { envidoDone: true }), [
     [0, call(CALL.truco)], [1, ACCEPT], ...toThirdTrick, [0, FOLD],
   ])
-  assert.deepEqual([nb.trucoCalls, nb.trucoBluffs], [0, 0])
+  assert.deepEqual([nb.trucoCalls, nb.trucoBluffs, nb.peekedTrucoCalls], [0, 0, 1])
 })
 
 test('a retruco counts like a truco', () => {
@@ -127,10 +134,12 @@ test('a human truco call whose hand only comes to light through the end-of-round
 })
 
 test('a saved notebook survives a reload; anything odd starts over', () => {
-  const nb = { ...newNotebook(), trucoCalls: 5, trucoBluffs: 2, envidoCalls: 3, envidoBluffs: 1 }
+  const nb = { ...newNotebook(), trucoCalls: 5, trucoBluffs: 2, envidoCalls: 3, envidoBluffs: 1, peekedTrucoCalls: 4, peekedTrucoBluffs: 3 }
   assert.deepEqual(fromSaved(toSaved(nb)), nb)
   assert.deepEqual(fromSaved(null), newNotebook())
   assert.deepEqual(fromSaved('not json'), newNotebook())
   assert.deepEqual(fromSaved('{"trucoCalls": -3, "trucoBluffs": "x"}'), newNotebook())
   assert.deepEqual(fromSaved('{"trucoCalls": 1, "trucoBluffs": 9}'), newNotebook())
+  assert.deepEqual(fromSaved('{"peekedEnvidoCalls": 1, "peekedEnvidoBluffs": 2}'), newNotebook())
+  assert.deepEqual(fromSaved('{"trucoCalls": 2, "trucoBluffs": 1}'), { ...newNotebook(), trucoCalls: 2, trucoBluffs: 1 }) // saved before peeking
 })

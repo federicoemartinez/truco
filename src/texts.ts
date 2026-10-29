@@ -62,16 +62,18 @@ const KNOWN_AFTER = 5 // calls seen before Bruno stops sounding unsure
 const times = (n: number) => (n === 1 ? '1 vez' : `${n} veces`)
 
 // The player's calls that came to light, as Bruno counted them (see learn.ts). Plain counts: his read
-// starts from a prior, so its percentage wouldn't match what the player remembers doing
+// starts from a prior, so its percentage wouldn't match what the player remembers doing. Lies he only
+// peeked at stay vague: the player knows he never saw those cards on the table
 export function knowledgeHtml(nb: Notebook): string {
   const seen = nb.trucoCalls + nb.envidoCalls
-  if (!seen) return `<h2>${T.knows}</h2><p>Todavía no te vio cantar nada.</p>`
-  const line = (name: string, calls: number, bluffs: number) => `<p><strong>${name}:</strong> ${
-    calls ? `te vio cantar ${times(calls)} y ${bluffs ? `mentiste en ${bluffs}` : 'no mentiste'}.` : 'todavía no te vio cantar.'}</p>`
+  if (!seen && !nb.peekedTrucoBluffs && !nb.peekedEnvidoBluffs) return `<h2>${T.knows}</h2><p>Todavía no te vio cantar nada.</p>`
+  const line = (name: string, calls: number, bluffs: number, peeked: number) => `<p><strong>${name}:</strong> ${
+    calls ? `te vio cantar ${times(calls)} y ${bluffs ? `mentiste en ${bluffs}` : 'no mentiste'}` : 'todavía no te vio cantar'}${
+    peeked ? `, pero sospecha que mentiste${calls ? ' más veces' : ''}` : ''}.</p>`
   return `<h2>${T.knows}</h2>
 <p>Solo cuenta los cantos que pudo comprobar en la mesa.</p>
-${line('Truco', nb.trucoCalls, nb.trucoBluffs)}
-${line('Envido', nb.envidoCalls, nb.envidoBluffs)}
+${line('Truco', nb.trucoCalls, nb.trucoBluffs, nb.peekedTrucoBluffs)}
+${line('Envido', nb.envidoCalls, nb.envidoBluffs, nb.peekedEnvidoBluffs)}
 ${seen < KNOWN_AFTER ? '<p>Todavía te está conociendo.</p>' : ''}`
 }
 
