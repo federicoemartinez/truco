@@ -50,6 +50,11 @@ export function mount(el: HTMLElement, h: Handlers) {
         toggleMute()
         target!.outerHTML = muteButton()
         return
+      case 'quit':
+        // Asks first: a stray tap shouldn't throw the match away
+        target!.outerHTML = `<button class="quit confirm" data-do="menu">${T.quitConfirm}</button>`
+        lastRender = performance.now() // a double tap can't confirm it at once
+        return
       case 'next': return h.onNextRound()
       case 'rematch': return h.onRematch()
       case 'menu': return h.onMenu()
@@ -238,7 +243,7 @@ export function renderGame(v: PlayerView, name: string) {
           ${thinking}
           ${bubble(opp, 'bubble-row')}
         </div>
-        ${muteButton()}
+        <div class="controls">${muteButton()}<button class="quit" data-do="quit">${T.menu}</button></div>
         ${scoreboard(v)}
       </header>
       <section class="tricks">${tricks}</section>

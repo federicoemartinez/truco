@@ -16,6 +16,7 @@ export const T = {
   nextRound: 'Siguiente mano',
   rematch: 'Revancha',
   menu: 'Menú',
+  quitConfirm: '¿Abandonar?',
   custom: 'Tu rival',
   customMotto: 'Armalo a tu gusto',
   name: 'Nombre',
