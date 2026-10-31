@@ -9,6 +9,7 @@ import { mount, refreshInstall, renderGame, showMenu } from './ui.ts'
 import { initInstall } from './install.ts'
 import { RIVALS } from './texts.ts'
 import * as voice from './voice.ts'
+import { load, save } from './storage.ts'
 
 const HUMAN: Player = 0
 const CPU: Player = 1
@@ -30,22 +31,6 @@ let custom: Character = characterFromSaved(load(CUSTOM_KEY))
 const LUCK_KEY = 'truco:luck'
 const savedLuck = load(LUCK_KEY)
 let luck: LuckLevel = LUCK_LEVELS.find((level) => level === savedLuck) ?? LUCK.balanced
-
-function load(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null // storage blocked: keep it within this page only
-  }
-}
-
-function save(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    // storage blocked or full: keep it in memory
-  }
-}
 
 function learn() {
   try {
