@@ -91,7 +91,7 @@ export type Action =
 
 export type GameEvent =
   | { type: 'play'; player: Player; card: Card }
-  | { type: 'call'; player: Player; call: Call }
+  | { type: 'call'; player: Player; call: Call; again?: true } // again: a truco asked once more after the envido
   | { type: 'accept'; player: Player }
   | { type: 'decline'; player: Player }
   | { type: 'fold'; player: Player }
@@ -324,6 +324,7 @@ function accept(s: State, p: Player) {
   const top = s.pending.pop()!
   if (top.kind === BET.envido) {
     resolveEnvido(s)
+    askTrucoAgain(s)
   } else {
     s.trucoLevel++
     s.raiseRights = p
@@ -340,7 +341,14 @@ function decline(s: State, p: Player) {
   }
   s.envidoDone = true
   award(s, top.caller, envidoDeclinedPoints(s.envidoCalls), REASON.envido)
+  askTrucoAgain(s)
   resume(s)
+}
+
+// An envido sung over a truco is settled first; then the truco is asked again, so the answer has its question
+function askTrucoAgain(s: State) {
+  const top = s.pending.at(-1)
+  if (top) s.log.push({ type: 'call', player: top.caller, call: TRUCO_CALLS[s.trucoLevel], again: true })
 }
 
 // The mano says its points; the pie only says them if they win ("son buenas" otherwise)

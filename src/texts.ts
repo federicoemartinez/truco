@@ -33,11 +33,13 @@ export const T = {
   trick: ['1ª', '2ª', '3ª'],
 }
 
+// In the menu's order: the easiest to read first
 export const RIVALS: Record<Rival, { name: string; motto: string }> = {
+  john: { name: 'John Bonachón', motto: 'Si canta, es porque tiene' },
   aristoteles: { name: 'Aristóteles Medio', motto: 'Ni mucho ni poco' },
   ramon: { name: 'Ramón Mentirón', motto: 'Miente como respira' },
-  john: { name: 'John Bonachón', motto: 'Si canta, es porque tiene' },
   bruno: { name: 'Bruno Aprendiz', motto: 'Te va tomando el tiempo' },
+  arnaldo: { name: 'Arnaldo Terminador', motto: 'Hasta la vista, mano' },
 }
 
 export const LUCK_LABEL: Record<LuckLevel, string> = {

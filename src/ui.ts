@@ -171,9 +171,11 @@ export function showMenu(known: Notebook, custom: Character, luck: LuckLevel) {
       <h1>${T.title}</h1>
       <p>${T.subtitle}</p>
       <p>${T.chooseRival}</p>
-      ${Object.entries(RIVALS).map(([id, r], k) => `<button class="rival${k === 0 ? ' primary' : ''}" data-do="start" data-rival="${id}">
-        <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
-      <button class="rival" data-do="custom"><strong>${esc(custom.name || T.custom)}</strong><small>${T.customMotto}</small></button>
+      <div class="rivals">
+        ${Object.entries(RIVALS).map(([id, r]) => `<button class="rival${id === 'aristoteles' ? ' primary' : ''}" data-do="start" data-rival="${id}">
+          <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
+        <button class="rival" data-do="custom"><strong>${esc(custom.name || T.custom)}</strong><small>${T.customMotto}</small></button>
+      </div>
       <label class="luck">${T.luck} <select id="luck">${LUCK_LEVELS.map((level) =>
         `<option value="${level}"${level === luck ? ' selected' : ''}>${LUCK_LABEL[level]}</option>`).join('')}</select></label>
       <button data-do="rules">${T.rules}</button>
@@ -265,8 +267,8 @@ function bubbleText(v: PlayerView, p: Player): string | null {
     const text = e.player === p ? speech(e, v.firstPlayer) : null
     if (!text) continue
     said.unshift(text)
-    // Answering an envido and declaring the points happen at once: keep the "¡Quiero!" before the points
-    if (e.type !== 'envidoPoints' && e.type !== 'sonBuenas') break
+    // Answering an envido, declaring the points and asking the truco again happen at once: keep them together
+    if (e.type !== 'envidoPoints' && e.type !== 'sonBuenas' && !(e.type === 'call' && e.again)) break
   }
   return said.length ? said.join(' ') : null
 }

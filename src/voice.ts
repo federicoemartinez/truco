@@ -12,6 +12,7 @@ export const VOICES: Record<Rival, Voice> = {
   ramon: { rate: 0.89, bright: -12 },
   john: { rate: 1.15, bright: 12 },
   bruno: { rate: 1, bright: 12 },
+  arnaldo: { rate: 0.85, bright: -12 }, // the deepest
 }
 
 // The clip of what speech() says for an event; null for events nobody says

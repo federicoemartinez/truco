@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { CALL, SUIT, apply, newMatch, seededRng, startRound, view } from '../src/engine.ts'
 import { DEFAULT_PARAMS, PRIOR_READ, PROFILES, chooseAction } from '../src/ai.ts'
 import { ACCEPT, DECLINE, FOLD, c, call, play, run, setup } from './helpers.ts'
+import type { State } from '../src/engine.ts'
 
 const WEAK = [c(4, SUIT.swords), c(5, SUIT.clubs), c(6, SUIT.cups)]
 
@@ -188,4 +189,73 @@ test('Bruno accepts a liar\'s envido more and an honest rival\'s less; Aristóte
   assert.ok(lied > prior + 20 && prior > straight + 30, `${lied} / ${prior} / ${straight} of 300`)
   const blind = PROFILES.aristoteles // Bruno without the reading
   assert.equal(answersEnvido(blind, liar), answersEnvido(blind, honest))
+})
+
+// Arnaldo plays seeing the human's cards (player 0's)
+const peek = (s: State) => ({ dealt: s.dealt[0], hand: s.hands[0] })
+const BRAVAS = [c(1, SUIT.swords), c(1, SUIT.clubs), c(7, SUIT.swords)]
+
+test('Arnaldo sings the truco on a round he cannot lose, only now and then before his first card, like anyone', () => {
+  const early = run(setup(WEAK, BRAVAS, { envidoDone: true }), [[0, play(c(4, SUIT.swords))]])
+  const sung = Array.from({ length: 200 }, (_, seed) => chooseAction(view(early, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(early))).filter((a) => a.type === 'call').length
+  assert.ok(sung > 25 && sung < 80, `sang ${sung} of 200 before his first card`)
+  const later = run(early, [[1, play(c(7, SUIT.swords))]])
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepEqual(chooseAction(view(later, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(later)), call(CALL.truco))
+  }
+})
+
+test('sung a truco he wins, Arnaldo raises only now and then, else he takes it and keeps the raise for later', () => {
+  const s = run(setup(WEAK, BRAVAS, { envidoDone: true }), [[0, call(CALL.truco)]])
+  const answers = Array.from({ length: 200 }, (_, seed) => chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)))
+  const raised = answers.filter((a) => a.type === 'call').length
+  assert.ok(raised > 40 && raised < 110, `raised ${raised} of 200`)
+  assert.equal(answers.filter((a) => a.type === 'accept').length, 200 - raised)
+})
+
+test('sung a truco on the last card he wins, Arnaldo always raises: there is no later', () => {
+  const human = [c(4, SUIT.cups), c(3, SUIT.cups), c(5, SUIT.coins)]
+  const cpu = [c(6, SUIT.swords), c(2, SUIT.clubs), c(1, SUIT.swords)]
+  const s = run(setup(human, cpu, { envidoDone: true }), [
+    [0, play(c(4, SUIT.cups))], [1, play(c(6, SUIT.swords))], // Arnaldo takes the first
+    [1, play(c(2, SUIT.clubs))], [0, play(c(3, SUIT.cups))], // the human the second
+    [0, call(CALL.truco)],
+  ])
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepEqual(chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)), call(CALL.retruco))
+  }
+})
+
+test('Arnaldo turns down a truco he is sure to lose, even with two 3s and a 2', () => {
+  const s = run(setup(BRAVAS, [c(3, SUIT.swords), c(3, SUIT.cups), c(2, SUIT.clubs)], { envidoDone: true }), [[0, call(CALL.truco)]])
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepEqual(chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)), DECLINE)
+  }
+})
+
+test('Arnaldo lies in the truco when the human thinks they are losing too', () => {
+  const human = [c(5, SUIT.swords), c(6, SUIT.coins), c(4, SUIT.clubs)]
+  const cpu = [c(4, SUIT.cups), c(5, SUIT.cups), c(4, SUIT.coins)] // loses every trick
+  const s = run(setup(human, cpu, { envidoDone: true }), [[0, play(c(6, SUIT.coins))], [1, play(c(4, SUIT.cups))], [0, play(c(5, SUIT.swords))]])
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepEqual(chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)), call(CALL.truco))
+  }
+})
+
+test('Arnaldo wants an envido he wins on 25 and turns down one he loses on 31', () => {
+  const wins = run(setup([c(1, SUIT.coins), c(3, SUIT.coins), c(12, SUIT.cups)], [c(10, SUIT.clubs), c(5, SUIT.clubs), c(4, SUIT.swords)]), [[0, call(CALL.envido)]])
+  const loses = run(setup([c(7, SUIT.cups), c(6, SUIT.cups), c(4, SUIT.swords)], [c(7, SUIT.coins), c(4, SUIT.coins), c(12, SUIT.swords)]), [[0, call(CALL.envido)]])
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.notDeepEqual(chooseAction(view(wins, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(wins)), DECLINE)
+    assert.deepEqual(chooseAction(view(loses, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(loses)), DECLINE)
+  }
+})
+
+test('Arnaldo bets the envido like his own points would: a quiero on 7, an envido on 29', () => {
+  const sung = run(setup([c(5, SUIT.coins), c(12, SUIT.cups), c(4, SUIT.swords)], [c(7, SUIT.clubs), c(11, SUIT.cups), c(2, SUIT.swords)]), [[0, call(CALL.envido)]])
+  const asMano = setup([c(5, SUIT.coins), c(3, SUIT.coins), c(12, SUIT.cups)], [c(6, SUIT.swords), c(3, SUIT.swords), c(4, SUIT.cups)], { firstPlayer: 1, turn: 1, resumeTurn: 1 })
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepEqual(chooseAction(view(sung, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(sung)), ACCEPT) // not the falta that beats 5
+    assert.deepEqual(chooseAction(view(asMano, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(asMano)), call(CALL.envido)) // not the real that tempts 28
+  }
 })

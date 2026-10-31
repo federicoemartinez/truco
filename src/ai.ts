@@ -1,7 +1,7 @@
 import {
-  BET, CALL, WIN, cardPower, envidoDeclinedPoints, envidoPoints, faltaPoints, isEnvido, newDeck, other, roundWinner, sameCard, shuffle, trickWinner,
+  BET, CALL, ENVIDO_CALLS, WIN, cardPower, envidoAcceptedPoints, envidoDeclinedPoints, envidoPoints, faltaPoints, isEnvido, newDeck, other, roundWinner, sameCard, shuffle, trickWinner,
 } from './engine.ts'
-import type { Action, Call, Card, Player, PlayerView, Rng } from './engine.ts'
+import type { Action, Call, Card, EnvidoCall, Player, PlayerView, Rng } from './engine.ts'
 
 // envidoBluff: chance of singing envido without points; trucoBluff: chance per turn of a truco or raise
 // without the cards; aggression: lowers the bar to call and accept; fish: chance of hiding a good
@@ -21,10 +21,15 @@ export const PROFILES = {
   ramon: { envidoBluff: 0.35, trucoBluff: 1, aggression: 0.75, fish: 0.1, slowplay: 0.5, reads: 0 }, // lies a lot and wants everything
   john: { envidoBluff: 0.01, trucoBluff: 0.1, aggression: 0.25, fish: 0, slowplay: 0.05, reads: 0 }, // if he sings envido, he has it
   bruno: { ...DEFAULT_PARAMS, reads: 1 }, // Aristóteles who learns how much you lie
+  arnaldo: DEFAULT_PARAMS, // plays seeing your cards (see knowItAll); without them, an Aristóteles
 } satisfies Record<string, AiParams>
 export type Rival = keyof typeof PROFILES
 
-export function chooseAction(v: PlayerView, params: AiParams = DEFAULT_PARAMS, rng: Rng = Math.random, read: Read = PRIOR_READ): Action {
+// The rival's cards, for the one AI that cheats: all it was dealt and what is still in hand
+export type Peek = { dealt: Card[]; hand: Card[] }
+
+export function chooseAction(v: PlayerView, params: AiParams = DEFAULT_PARAMS, rng: Rng = Math.random, read: Read = PRIOR_READ, peek?: Peek): Action {
+  if (peek) return knowItAll(v, peek, rng)
   const top = v.pending.at(-1)
   if (top?.kind === BET.envido) return respondEnvido(v, params, rng, read)
   if (top?.kind === BET.truco) return respondTruco(v, params, rng, read)
@@ -82,12 +87,17 @@ function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefine
   if (lastStand(v, v.me)) return raise
   // Hardly anyone sings truco before playing a card: even with a sure hand it pays to wait for the first
   // trick, so only now and then, and never as a bluff
-  if (v.tricks.length === 1 && v.tricks[0].cards[v.me] === null) {
-    return rng() < 0.25 && winChance(v, rng) >= 0.9 - 0.2 * params.aggression ? raise : undefined
+  if (beforeFirstCard(v)) {
+    return rng() < EARLY_TRUCO && winChance(v, rng) >= 0.9 - 0.2 * params.aggression ? raise : undefined
   }
   if (winChance(v, rng) >= 0.7 - 0.2 * params.aggression) return rng() < params.slowplay ? undefined : raise
   return bluffs(v, params, rng) ? raise : undefined
 }
+
+const EARLY_TRUCO = 0.25 // how often a truco comes before the singer's first card
+const ENVIDO_LIE = 0.25 // how often Arnaldo sings an envido on poor points, when it can't cost him
+const RAISE_AT_ONCE = 0.35 // how often Arnaldo answers a truco he wins with a raise instead of a quiero
+const beforeFirstCard = (v: PlayerView) => v.tricks.length === 1 && v.tricks[0].cards[v.me] === null
 
 function respondTruco(v: PlayerView, params: AiParams, rng: Rng, read: Read): Action {
   const envido = callEnvido(v, params, rng, false) // el envido está primero
@@ -179,21 +189,18 @@ function bluffs(v: PlayerView, params: AiParams, rng: Rng): boolean {
 function playout(hands: [Card[], Card[]], results: (Player | 'tie')[], table: [Card | null, Card | null], turn: Player, first: Player): Player {
   const decided = roundWinner(results, first)
   if (decided !== null) return decided
-  for (const card of hands[turn]) {
-    const rest: [Card[], Card[]] = [hands[0], hands[1]]
-    rest[turn] = hands[turn].filter((h) => h !== card)
-    const t: [Card | null, Card | null] = [table[0], table[1]]
-    t[turn] = card
-    let winner: Player
-    if (t[0] && t[1]) {
-      const won = trickWinner(t[0], t[1])
-      winner = playout(rest, [...results, won], [null, null], won === 'tie' ? first : won, first)
-    } else {
-      winner = playout(rest, results, t, other(turn), first)
-    }
-    if (winner === turn) return turn
-  }
-  return other(turn)
+  return hands[turn].some((card) => playoutAfter(card, hands, results, table, turn, first) === turn) ? turn : other(turn)
+}
+
+// The same, once the player whose turn it is has put down this card
+function playoutAfter(card: Card, hands: [Card[], Card[]], results: (Player | 'tie')[], table: [Card | null, Card | null], turn: Player, first: Player): Player {
+  const rest: [Card[], Card[]] = [hands[0], hands[1]]
+  rest[turn] = hands[turn].filter((h) => !sameCard(h, card))
+  const t: [Card | null, Card | null] = [table[0], table[1]]
+  t[turn] = card
+  if (!t[0] || !t[1]) return playout(rest, results, t, other(turn), first)
+  const won = trickWinner(t[0], t[1])
+  return playout(rest, [...results, won], [null, null], won === 'tie' ? first : won, first)
 }
 
 function chooseCard(v: PlayerView): Action {
@@ -218,4 +225,75 @@ function chooseCard(v: PlayerView): Action {
   if (trickIndex === 0) return play(weakestFirst[Math.floor(weakestFirst.length / 2)])
   // Leading a later trick means we won or tied the first: our best card closes the round
   return play(weakestFirst[weakestFirst.length - 1])
+}
+
+// Arnaldo Terminador sees the rival's cards: he knows who takes the envido and, both playing their best,
+// the round. He bets everything he wins and walks away from what he loses, except to lie where the rival,
+// looking at their own cards, would believe him
+function knowItAll(v: PlayerView, peek: Peek, rng: Rng): Action {
+  const opp = other(v.me)
+  const mine = envidoPoints(v.dealt)
+  const theirs = envidoPoints(peek.dealt)
+  const winsEnvido = mine > theirs || (mine === theirs && v.firstPlayer === v.me)
+  const hands: [Card[], Card[]] = [[], []]
+  hands[v.me] = v.hand
+  hands[opp] = peek.hand
+  const results = v.tricks.slice(0, -1).map((t) => t.winner as Player | 'tie')
+  const table = v.tricks[v.tricks.length - 1].cards
+  const turn = v.pending.length ? v.resumeTurn : v.turn
+  const winsRound = playout(hands, results, table, turn, v.firstPlayer) === v.me
+  // How the round looks to the rival, from their side of the table
+  const played = peek.dealt.filter((card) => !peek.hand.some((h) => sameCard(h, card)))
+  const theyFeelWeak = () => winChance(asSeenByRival(v, peek.hand, played), rng) < 0.5
+
+  // He bets the envido no bigger than his own points would, as if he saw only his cards: a falta on 7
+  // that wins would give him away. What he sees of theirs only keeps him out of the envidos he loses
+  const credible = mine >= 32 ? CALL.faltaEnvido : mine >= 30 ? CALL.realEnvido : CALL.envido
+  const fits = (c: EnvidoCall) => ENVIDO_CALLS.indexOf(c) <= ENVIDO_CALLS.indexOf(credible)
+  const top = v.pending.at(-1)
+  if (top?.kind === BET.envido) {
+    if (!winsEnvido) return v.score[opp] + envidoDeclinedPoints(v.envidoCalls) >= WIN ? find(v, 'accept')! : find(v, 'decline')!
+    // Raising a won envido can't hurt: turned down, it pays what accepting it would have
+    const worth = (calls: EnvidoCall[]) => envidoAcceptedPoints(calls, v.score, v.me)
+    let best = find(v, 'accept')!
+    let most = worth(v.envidoCalls)
+    for (const a of v.legal) {
+      if (a.type === 'call' && isEnvido(a.call) && a.call !== CALL.envido && fits(a.call) && worth([...v.envidoCalls, a.call]) > most) {
+        [best, most] = [a, worth([...v.envidoCalls, a.call])]
+      }
+    }
+    return best
+  }
+
+  // El envido está primero: sung on good points when won, the bigger the more the rival has to accept it
+  // with; on poor points, only now and then as a lie that can't cost him: won, or against too few to accept
+  if (find(v, 'call', CALL.envido)) {
+    const tempting = theirs >= 31 ? CALL.faltaEnvido : theirs >= 28 ? CALL.realEnvido : CALL.envido
+    if (winsEnvido && mine >= 27) return find(v, 'call', fits(tempting) ? tempting : credible)!
+    if (mine < 27 && (winsEnvido || theirs < 24) && rng() < ENVIDO_LIE) return find(v, 'call', CALL.envido)!
+  }
+
+  const raise = trucoCall(v)
+  if (top?.kind === BET.truco) {
+    // A won truco is raised at once only now and then: a quiero keeps the raise his, for later. On his
+    // last card there is no later
+    if (raise && (lastStand(v, v.me) || (winsRound && (v.hand.length <= 1 || rng() < RAISE_AT_ONCE)))) return raise
+    const declineLosesMatch = v.score[opp] + v.trucoLevel + 1 >= WIN
+    return winsRound || declineLosesMatch ? find(v, 'accept')! : find(v, 'decline')!
+  }
+  // Like anyone, he hardly sings before his first card, won or lied, so an early truco gives nothing away
+  const now = !beforeFirstCard(v) || rng() < EARLY_TRUCO
+  if (raise && (lastStand(v, v.me) || (now && (winsRound || theyFeelWeak())))) return raise
+
+  // Both playing their best: the cheapest card that takes the round, else the cheapest one
+  const play = (card: Card): Action => ({ type: 'play', card })
+  const weakestFirst = [...v.hand].sort((a, b) => cardPower(a) - cardPower(b))
+  const winning = weakestFirst.find((card) => playoutAfter(card, hands, results, table, v.me, v.firstPlayer) === v.me)
+  // ponytail: a lost round is played out with the lowest card; picking the one that leaves the rival the most ways to slip would squeeze more
+  return play(winning ?? weakestFirst[0])
+}
+
+// The rival's own view at that moment, given the cards they hold
+export function asSeenByRival(seen: PlayerView, hand: Card[], played: Card[]): PlayerView {
+  return { ...seen, me: other(seen.me), hand, dealt: [...played, ...hand], opponentHandSize: seen.hand.length, legal: [] }
 }
