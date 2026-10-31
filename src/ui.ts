@@ -265,8 +265,8 @@ function bubbleText(v: PlayerView, p: Player): string | null {
     const text = e.player === p ? speech(e, v.firstPlayer) : null
     if (!text) continue
     said.unshift(text)
-    // Answering an envido and declaring the points happen at once: keep the "¡Quiero!" before the points
-    if (e.type !== 'envidoPoints' && e.type !== 'sonBuenas') break
+    // Answering an envido, declaring the points and asking the truco again happen at once: keep them together
+    if (e.type !== 'envidoPoints' && e.type !== 'sonBuenas' && !(e.type === 'call' && e.again)) break
   }
   return said.length ? said.join(' ') : null
 }

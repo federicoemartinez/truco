@@ -359,6 +359,14 @@ test('el envido está primero: envido over a truco, then the truco is answered',
   assert.equal(s.turn, 0)
 })
 
+test('once the envido is settled, whoever sang the truco asks it again', () => {
+  const sung = { type: 'call', player: 0, call: CALL.truco, again: true }
+  assert.deepEqual(run(setup(MANO_27, PIE_33), [[0, call(CALL.truco)], [1, call(CALL.envido)], [0, ACCEPT]]).log.at(-1), sung)
+  assert.deepEqual(run(setup(MANO_27, PIE_33), [[0, call(CALL.truco)], [1, call(CALL.envido)], [0, DECLINE]]).log.at(-1), sung)
+  const raised = run(setup(MANO_27, PIE_33), [[0, call(CALL.truco)], [1, call(CALL.retruco)], [0, call(CALL.valeCuatro)]])
+  assert.equal(raised.log.filter((e) => e.type === 'call' && e.again).length, 0) // no envido in between: nothing to repeat
+})
+
 test('no envido once the truco is accepted', () => {
   const s = run(setup(MANO_27, PIE_33), [[0, call(CALL.truco)], [1, ACCEPT]])
   assert.ok(!legalActions(s, 0).some(isEnvidoAction))
