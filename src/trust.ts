@@ -37,11 +37,13 @@ export async function newIdentity(): Promise<Identity> {
 
 export const newNonce = () => toB64(crypto.getRandomValues(new Uint8Array(16)))
 
-// The DTLS certificate fingerprints in an SDP, sorted. Every WebRTC connection gets its own certificate,
-// so they name one connection: a proof signed over them can't be replayed on another
+// The DTLS certificate fingerprints in an SDP, sorted and deduplicated. Every WebRTC connection
+// gets its own certificate, so they name one connection: a proof signed over them can't be replayed on another
 export function fingerprints(sdp: string | undefined): string | null {
-  const found = (sdp ?? '').match(/^a=fingerprint:.+$/gm)?.map((line) => line.trim().toLowerCase()).sort()
-  return found?.length ? found.join(',') : null
+  const matches = (sdp ?? '').match(/^a=fingerprint:[a-z0-9-]+ [0-9a-f:]+$/gim)
+  if (!matches) return null
+  const deduped = Array.from(new Set(matches.map((line) => line.trim().toLowerCase()))).sort()
+  return deduped.length ? deduped.join(',') : null
 }
 
 const proofText = (nonce: string, signerLocal: string, signerRemote: string) =>
@@ -49,11 +51,14 @@ const proofText = (nonce: string, signerLocal: string, signerRemote: string) =>
 
 // "I hold this key, on this connection": a signature over the other side's nonce and both fingerprints
 export async function prove(me: Identity, theirNonce: string, local: string, remote: string): Promise<string> {
+  if (!isB64(theirNonce, NONCE_LENGTH)) throw new Error('nonce must be base64url')
+  if (!local || !remote) throw new Error('fingerprints must be non-empty')
   return toB64(await crypto.subtle.sign(SIGN, me.privateKey, proofText(theirNonce, local, remote)))
 }
 
 // Checks a proof; the signer's local fingerprint is the verifier's remote one
 export async function verify(publicKey: string, sig: string, myNonce: string, local: string, remote: string): Promise<boolean> {
+  if (!isB64(publicKey, KEY_LENGTH) || !isB64(sig, SIG_LENGTH) || !isB64(myNonce, NONCE_LENGTH) || !local || !remote) return false
   try {
     const key = await crypto.subtle.importKey('raw', fromB64(publicKey), ALGO, false, ['verify'])
     return await crypto.subtle.verify(SIGN, key, fromB64(sig), proofText(myNonce, remote, local))

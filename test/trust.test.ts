@@ -40,3 +40,28 @@ test('fingerprints come out of the SDP sorted, and none is none', () => {
   assert.equal(fingerprints('v=0\r\nm=application 9\r\n'), null)
   assert.equal(fingerprints(undefined), null)
 })
+
+test('prove rejects a nonce with | in it and empty fingerprints', async () => {
+  const me = await newIdentity()
+  await assert.rejects(() => prove(me, 'N|fpX' + 'A'.repeat(16), 'fpA', 'fpB'))
+  await assert.rejects(() => prove(me, newNonce(), '', 'fpB'))
+  await assert.rejects(() => prove(me, newNonce(), 'fpA', ''))
+})
+
+test('verify returns false for malformed inputs', async () => {
+  const me = await newIdentity()
+  const nonce = newNonce()
+  const sig = await prove(me, nonce, 'fpA', 'fpB')
+  assert.equal(await verify(me.publicKey, sig, nonce, '', 'fpB'), false)
+  assert.equal(await verify(me.publicKey, sig, nonce, 'fpA', ''), false)
+  assert.equal(await verify(me.publicKey, sig, 'short', 'fpA', 'fpB'), false)
+  assert.equal(await verify(me.publicKey, 'short', nonce, 'fpA', 'fpB'), false)
+  assert.equal(await verify('short', sig, nonce, 'fpA', 'fpB'), false)
+})
+
+test('fingerprints deduplicates and ignores malformed lines', () => {
+  const sdp = 'v=0\r\na=fingerprint:sha-256 ab:cd\r\na=fingerprint:sha-256 ab:cd\r\na=fingerprint:sha-256 AB|CD\r\n'
+  assert.equal(fingerprints(sdp), 'a=fingerprint:sha-256 ab:cd')
+  const sdpMalformed = 'v=0\r\na=fingerprint:sha-256 AB|CD\r\n'
+  assert.equal(fingerprints(sdpMalformed), null)
+})
