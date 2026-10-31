@@ -15,6 +15,7 @@ const CPU: Player = 1
 
 let state: State
 let rival: Character
+let peeks = false // Arnaldo plays seeing the player's cards
 let cpuTimer: number | undefined
 
 // What the CPU learned about the player outlives the match and the page (see learn.ts)
@@ -79,7 +80,8 @@ function cpuMove(waited = 0) {
   }
   const v = view(state, CPU)
   try {
-    act(CPU, chooseAction(v, rival.params, Math.random, readOf(notebook)))
+    const peek = peeks ? { dealt: state.dealt[HUMAN], hand: state.hands[HUMAN] } : undefined
+    act(CPU, chooseAction(v, rival.params, Math.random, readOf(notebook), peek))
   } catch (err) {
     console.error(err) // never leave the match stuck on an AI bug
     act(CPU, v.legal[0])
@@ -99,6 +101,7 @@ function startMatch() {
 mount(document.getElementById('app')!, {
   onStart: (picked) => {
     voice.unlock()
+    peeks = picked === 'arnaldo'
     if (typeof picked === 'string') {
       rival = { name: RIVALS[picked].name, params: PROFILES[picked], voice: voice.VOICES[picked] }
     } else {

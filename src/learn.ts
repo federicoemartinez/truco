@@ -1,6 +1,6 @@
 import { envidoPoints, isEnvido, other, sameCard } from './engine.ts'
 import type { Action, Card, PlayerView, Rng } from './engine.ts'
-import { PRIOR_READ, lastStand, winChance } from './ai.ts'
+import { PRIOR_READ, asSeenByRival, lastStand, winChance } from './ai.ts'
 import type { Read } from './ai.ts'
 
 // What the AI knows of its rival. Seen: what came to light on the table, the cards the rival played or
@@ -85,11 +85,6 @@ export function learnFromRound(nb: Notebook, done: PlayerView, rivalDealt: Card[
     if (winChance(asSeenByRival(seen, handThen, playedThen), rng) < 0.5) next.trucoBluffs++
   }
   return next
-}
-
-// The rival's own view at that moment, now that we know the cards they held
-function asSeenByRival(seen: PlayerView, hand: Card[], played: Card[]): PlayerView {
-  return { ...seen, me: other(seen.me), hand, dealt: [...played, ...hand], opponentHandSize: seen.hand.length, legal: [] }
 }
 
 // What survives a reload: the counts, not this round's pending calls

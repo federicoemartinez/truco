@@ -89,3 +89,20 @@ test('the luckier the CPU, the more matches it wins', () => {
   })
   for (let k = 1; k < rates.length; k++) assert.ok(rates[k] > rates[k - 1] + 0.05, `${LUCK_LEVELS[k]}: ${rates.map((r) => r.toFixed(2))}`)
 })
+
+// Arnaldo sees the other's cards: against Aristóteles, even luck, he should hardly ever lose
+test('Arnaldo, seeing the cards, crushes Aristóteles', () => {
+  const rng = seededRng(99)
+  let wins = 0
+  for (let m = 0; m < 200; m++) {
+    let s = newMatch(rng)
+    while (s.phase !== 'matchOver') {
+      if (s.phase === 'roundOver') { s = startRound(s, rng); continue }
+      const peek = s.turn === 1 ? { dealt: s.dealt[0], hand: s.hands[0] } : undefined
+      s = apply(s, s.turn, chooseAction(view(s, s.turn), DEFAULT_PARAMS, rng, undefined, peek))
+    }
+    if (s.winner === 1) wins++
+  }
+  console.log(`Arnaldo won ${wins} of 200`)
+  assert.ok(wins >= 180, `won ${wins} of 200`)
+})
