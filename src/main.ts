@@ -5,11 +5,14 @@ import { fromSaved as characterFromSaved } from './custom.ts'
 import type { Character } from './custom.ts'
 import { fromSaved, learnFromRound, noteCall, readOf, toSaved } from './learn.ts'
 import type { Notebook } from './learn.ts'
-import { mount, refreshInstall, renderGame, showMenu } from './ui.ts'
+import { mount, refreshInstall, renderGame, showGuestLobby, showMenu } from './ui.ts'
 import { initInstall } from './install.ts'
 import { RIVALS } from './texts.ts'
 import * as voice from './voice.ts'
 import { load, save } from './storage.ts'
+import * as friend from './friend.ts'
+import { ID_PATTERN, loadIdentity } from './trust.ts'
+import type { Identity } from './trust.ts'
 
 const HUMAN: Player = 0
 const CPU: Player = 1
@@ -31,6 +34,28 @@ let custom: Character = characterFromSaved(load(CUSTOM_KEY))
 const LUCK_KEY = 'truco:luck'
 const savedLuck = load(LUCK_KEY)
 let luck: LuckLevel = LUCK_LEVELS.find((level) => level === savedLuck) ?? LUCK.balanced
+
+// Against a friend instead of the CPU (see friend.ts)
+let online = false
+let identity: Promise<Identity> | undefined
+const me = () => (identity ??= loadIdentity())
+
+// A friend's invitation: ?sala=<their id>
+const room = new URLSearchParams(location.search).get('sala')
+const invited = room !== null && ID_PATTERN.test(room)
+
+const menu = () => showMenu(notebook, custom, luck, friend.savedMatch()?.guestName ?? null)
+
+// From a tap: the voices unlock now, before waiting for the keys
+async function playFriend(guestOf: string | null) {
+  clearTimeout(cpuTimer)
+  voice.stop()
+  voice.unlock()
+  online = true
+  const id = await me()
+  if (guestOf && guestOf !== id.id) friend.guest(id, guestOf)
+  else friend.host(id) // our own link opens our own room
+}
 
 function learn() {
   try {
@@ -98,23 +123,35 @@ mount(document.getElementById('app')!, {
     save(LUCK_KEY, luck)
   },
   onAction: (action) => {
+    if (online) return friend.action(action)
     notebook = noteCall(notebook, view(state, CPU), action)
     act(HUMAN, action)
     update()
   },
   onNextRound: () => {
+    if (online) return friend.nextRound()
     state = startRound(state, Math.random)
     update()
   },
-  onRematch: startMatch,
+  onRematch: () => (online ? friend.nextRound() : startMatch()),
   onMenu: () => {
     clearTimeout(cpuTimer)
     voice.stop()
-    showMenu(notebook, custom, luck, null)
+    if (online) {
+      online = false
+      void friend.quit()
+      history.replaceState(null, '', location.pathname) // no invitation left in the address bar
+    }
+    menu()
   },
-  onFriend: () => {},
-  onEnter: () => {},
-  onName: () => {},
+  onFriend: () => void playFriend(null),
+  onEnter: (name) => {
+    friend.setName(name)
+    showGuestLobby(name, 'connecting')
+    void playFriend(room)
+  },
+  onName: friend.setName,
 })
-showMenu(notebook, custom, luck, null)
+if (invited) showGuestLobby(friend.myName(), 'idle')
+else menu()
 initInstall(refreshInstall)
