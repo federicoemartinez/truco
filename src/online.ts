@@ -1,5 +1,5 @@
-import { BET, CALL, ENVIDO_CALLS, RANKS, REASON, SUITS, WIN } from './engine.ts'
-import type { Action, Card, GameEvent, Pending, Player, PlayerView, Trick } from './engine.ts'
+import { BET, CALL, ENVIDO_CALLS, RANKS, REASON, SUITS, WIN, legalActions, newMatch, sameAction, startRound } from './engine.ts'
+import type { Action, Card, GameEvent, Pending, Player, PlayerView, Rng, State, Trick } from './engine.ts'
 import { KEY_LENGTH, NONCE_LENGTH, SIG_LENGTH, isB64 } from './trust.ts'
 
 // What the two phones say to each other (see docs/superpowers/specs/2026-10-31-online-design.md)
@@ -189,5 +189,51 @@ export function parseMsg(x: unknown): Msg | null {
     }
     default:
       return null
+  }
+}
+
+// The host's match against a friend: the state, who already said "next", and who the guest is
+export type Match = { state: State; ready: [boolean, boolean]; guestKey: string; guestName: string }
+
+// Who gets the guest's chair: anyone while no match is on, else only that match's guest
+export function seat(guestKey: string | null, key: string): 'new' | 'resume' | 'busy' {
+  if (guestKey === null) return 'new'
+  return key === guestKey ? 'resume' : 'busy'
+}
+
+// A player's "next" at the end of a round or match; once both said it, the next deal (a new match
+// after the last round)
+export function markReady(m: Match, p: Player, rng: Rng): Match {
+  if (m.state.phase === 'playing') return m // a "next" in the middle of a round means nothing
+  const ready: [boolean, boolean] = [m.ready[0], m.ready[1]]
+  ready[p] = true
+  if (!ready[0] || !ready[1]) return { ...m, ready }
+  const state = m.state.phase === 'matchOver' ? newMatch(rng) : startRound(m.state, rng)
+  return { ...m, state, ready: [false, false] }
+}
+
+// The engine's own copy of the move the guest asked for, or null if they can't make it now: nothing the
+// other phone built goes into the state
+export function legalMove(state: State, p: Player, wanted: Action): Action | null {
+  return legalActions(state, p).find((a) => sameAction(a, wanted)) ?? null
+}
+
+// What the guest hasn't heard yet: the events since its last view, or the whole log of a new deal
+export function newEvents(prev: PlayerView | null, next: PlayerView): GameEvent[] {
+  if (!prev || prev.round !== next.round || next.log.length < prev.log.length) return next.log
+  return next.log.slice(prev.log.length)
+}
+
+export const matchToSaved = (m: Match) => JSON.stringify({ state: m.state, guestKey: m.guestKey, guestName: m.guestName })
+
+// The host's match in play, from this phone's own storage; anything odd and there is none
+export function matchFromSaved(raw: string | null): Match | null {
+  try {
+    const o = JSON.parse(raw ?? 'null')
+    if (!isB64(o?.guestKey, KEY_LENGTH) || typeof o.guestName !== 'string') return null
+    if (o.state?.phase !== 'playing' && o.state?.phase !== 'roundOver') return null
+    return { state: o.state, ready: [false, false], guestKey: o.guestKey, guestName: cleanName(o.guestName) }
+  } catch {
+    return null
   }
 }
