@@ -267,8 +267,9 @@ function knowItAll(v: PlayerView, peek: Peek, rng: Rng): Action {
 
   const raise = trucoCall(v)
   if (top?.kind === BET.truco) {
-    // A won truco is raised at once only now and then: a quiero keeps the raise his, for later
-    if (raise && (lastStand(v, v.me) || (winsRound && rng() < RAISE_AT_ONCE))) return raise
+    // A won truco is raised at once only now and then: a quiero keeps the raise his, for later. On his
+    // last card there is no later
+    if (raise && (lastStand(v, v.me) || (winsRound && (v.hand.length <= 1 || rng() < RAISE_AT_ONCE)))) return raise
     const declineLosesMatch = v.score[opp] + v.trucoLevel + 1 >= WIN
     return winsRound || declineLosesMatch ? find(v, 'accept')! : find(v, 'decline')!
   }

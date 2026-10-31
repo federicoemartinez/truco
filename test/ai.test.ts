@@ -213,6 +213,19 @@ test('sung a truco he wins, Arnaldo raises only now and then, else he takes it a
   assert.equal(answers.filter((a) => a.type === 'accept').length, 200 - raised)
 })
 
+test('sung a truco on the last card he wins, Arnaldo always raises: there is no later', () => {
+  const human = [c(4, SUIT.cups), c(3, SUIT.cups), c(5, SUIT.coins)]
+  const cpu = [c(6, SUIT.swords), c(2, SUIT.clubs), c(1, SUIT.swords)]
+  const s = run(setup(human, cpu, { envidoDone: true }), [
+    [0, play(c(4, SUIT.cups))], [1, play(c(6, SUIT.swords))], // Arnaldo takes the first
+    [1, play(c(2, SUIT.clubs))], [0, play(c(3, SUIT.cups))], // the human the second
+    [0, call(CALL.truco)],
+  ])
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepEqual(chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)), call(CALL.retruco))
+  }
+})
+
 test('Arnaldo turns down a truco he is sure to lose, even with two 3s and a 2', () => {
   const s = run(setup(BRAVAS, [c(3, SUIT.swords), c(3, SUIT.cups), c(2, SUIT.clubs)], { envidoDone: true }), [[0, call(CALL.truco)]])
   for (let seed = 1; seed <= 50; seed++) {
