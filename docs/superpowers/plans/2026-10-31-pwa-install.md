@@ -19,7 +19,8 @@
 - Every URL in the manifest and in `index.html` is relative (`./…` or bare names), never starting with `/`: the game is served from `https://federicoemartinez.github.io/truco/` and from portals' subfolders.
 - Colors: theme `#1d6b45` (`--felt` in `style.css`), background `#13492f` (`--felt-dark`).
 - Nothing at all on iPhone/Safari: no button, no hint.
-- The service worker caches nothing (no offline mode): a cache would serve stale builds after each deploy.
+- Phones only: on a computer (no coarse pointer) no button either. Desktop Chrome would install it as a landscape window, where the game looks bad, and the label says "celu".
+- The service worker caches nothing (no offline mode): a cache would serve stale builds after each deploy. Its fetch handler passes every request to the network instead of being empty: Chrome flags no-op handlers and still wants a real one before it fires `beforeinstallprompt`.
 - Inside an iframe (CrazyGames and other portals) neither register the service worker nor show the button.
 - Match the surrounding code: terse comments that explain why, short functions, `ponytail:` comments on deliberate shortcuts.
 - Commit messages follow the repo's style, e.g. `feat: …` / `fix: …`, one line in plain English.
@@ -34,6 +35,7 @@
 - **Served from `/truco/`, not `/`:** a leading `/` in the manifest's `start_url`, `scope` or icon `src` would install an app that opens `github.io/` and 404s. Pinned by the relative-URL assertions in Task 1's test.
 - **Opened inside a portal's iframe:** no service worker registration and no button. Pinned by the `window.top !== window` guard in Task 2, checked by hand in Task 3 Step 3.
 - **The player dismisses Chrome's dialog:** the button must not stay on screen as a dead button (the held event can only be used once). Task 2 drops the event before calling `prompt()` and refreshes the button.
+- **A computer with Chrome or Edge:** they fire the event too; the `pointer: coarse` guard keeps the button off. Checked by hand in Task 3 Step 4 by toggling devtools' device mode.
 - **Browsers without the event (iPhone, Firefox, already installed):** the button never shows and nothing throws; `navigator.serviceWorker` may be undefined (plain `http://` on a LAN IP). Task 2 uses optional chaining and starts with the button `hidden`.
 - **Maskable crop:** Android crops the icon to a circle or squircle covering the central 80%; the card must stay inside it. Task 1 checks the geometry and shows a cropped preview.
 
@@ -209,9 +211,9 @@ git commit -m "feat: a web app manifest and the ancho de espada as app icon, so 
 Append to `test/pwa.test.ts`:
 
 ```ts
-test('the service worker only exists for Chrome to offer the install: a fetch handler that caches nothing', () => {
+test('the service worker only exists for Chrome to offer the install: a pass-through fetch handler that caches nothing', () => {
   const sw = read('public/sw.js').toString()
-  assert.match(sw, /addEventListener\('fetch'/)
+  assert.match(sw, /respondWith\(fetch\(/)
   assert.doesNotMatch(sw, /caches\./)
 })
 ```
@@ -226,9 +228,9 @@ Expected: FAIL, `ENOENT … public/sw.js`.
 Create `public/sw.js`:
 
 ```js
-// Only here so Chrome offers to install the game, which asks for a fetch handler. It caches nothing on
-// purpose: every request goes to the network, so a new deploy is never hidden behind a stale copy
-self.addEventListener('fetch', () => {})
+// Only here so Chrome offers to install the game, which asks for a fetch handler that answers (an empty one
+// counts as none). It caches nothing on purpose: a new deploy is never hidden behind a stale copy
+self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)))
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -249,6 +251,7 @@ let held: InstallPrompt | null = null
 
 export function initInstall(onChange: () => void) {
   if (window.top !== window) return // inside a portal's iframe: their page, not ours to install
+  if (!matchMedia('(pointer: coarse)').matches) return // a computer: a landscape window, where the game looks bad
   navigator.serviceWorker?.register('./sw.js').catch((err) => console.warn(err)) // undefined over plain http
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault() // no banner of Chrome's own: the menu button offers it
@@ -373,17 +376,20 @@ Expected: in a desktop browser at `http://localhost:5173/`, the devtools console
 
 Create `/tmp/frame.html` with `<iframe src="http://localhost:5173/" width="412" height="860"></iframe>`, open it in a desktop Chrome, and in devtools → Application → Service workers check that **no** worker is registered for `localhost:5173` from the iframe (unregister any left from Step 2 first).
 
-- [ ] **Step 4: Push and hand over the PR link**
+- [ ] **Step 4: The button itself, on localhost**
+
+`localhost` is a secure context, so Chrome fires `beforeinstallprompt` there without HTTPS. In desktop Chrome at `http://localhost:5173/`: devtools → Application → Manifest shows no installability errors, and no button shows (a mouse is a fine pointer). Turn on devtools' device mode with a phone and reload: after clicking around for ~30 seconds the "Instalalo en tu celu" button appears; tapping it opens Chrome's install dialog, and dismissing it hides the button. Same on the Pixel with `adb reverse tcp:5173 tcp:5173` and Chrome at `http://localhost:5173/`. Hand these to the user if they can't be driven from here.
+
+- [ ] **Step 5: Push and hand over the PR link**
 
 ```bash
 GIT_SSH_COMMAND="ssh -i ~/.ssh/id_federicoemartinez_gitub -o IdentitiesOnly=yes -o BatchMode=yes" git push -u origin feat/pwa-install
 ```
 
-Give the user the PR link from Global Constraints, and tell them what can only be checked after the merge deploys to `https://federicoemartinez.github.io/truco/` (Chrome requires HTTPS):
+Give the user the PR link from Global Constraints, and tell them what to recheck after the merge deploys to `https://federicoemartinez.github.io/truco/` (the real URL, under `/truco/`):
 
 1. On the Pixel, in Chrome, open the page and wait about 30 seconds while tapping around (Chrome's engagement check). The "Instalalo en tu celu" button appears in the menu.
 2. Tapping it opens Chrome's "Instalar app" dialog. Dismiss it once: the button disappears.
 3. Install it: the ancho de espada icon is on the home screen, and it opens full screen, with no browser bar.
 4. Optionally, in desktop Chrome devtools → Application → Manifest, the "Installability" section lists no errors.
 
-If step 1 never shows the button and devtools' Installability section complains about the service worker, replace the no-op handler in `public/sw.js` with a pass-through: `self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)))`.
