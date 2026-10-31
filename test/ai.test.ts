@@ -205,6 +205,14 @@ test('Arnaldo sings the truco on a round he cannot lose, only now and then befor
   }
 })
 
+test('sung a truco he wins, Arnaldo raises only now and then, else he takes it and keeps the raise for later', () => {
+  const s = run(setup(WEAK, BRAVAS, { envidoDone: true }), [[0, call(CALL.truco)]])
+  const answers = Array.from({ length: 200 }, (_, seed) => chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)))
+  const raised = answers.filter((a) => a.type === 'call').length
+  assert.ok(raised > 40 && raised < 110, `raised ${raised} of 200`)
+  assert.equal(answers.filter((a) => a.type === 'accept').length, 200 - raised)
+})
+
 test('Arnaldo turns down a truco he is sure to lose, even with two 3s and a 2', () => {
   const s = run(setup(BRAVAS, [c(3, SUIT.swords), c(3, SUIT.cups), c(2, SUIT.clubs)], { envidoDone: true }), [[0, call(CALL.truco)]])
   for (let seed = 1; seed <= 50; seed++) {

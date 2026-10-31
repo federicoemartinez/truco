@@ -95,6 +95,7 @@ function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefine
 }
 
 const EARLY_TRUCO = 0.25 // how often a truco comes before the singer's first card
+const RAISE_AT_ONCE = 0.35 // how often Arnaldo answers a truco he wins with a raise instead of a quiero
 const beforeFirstCard = (v: PlayerView) => v.tricks.length === 1 && v.tricks[0].cards[v.me] === null
 
 function respondTruco(v: PlayerView, params: AiParams, rng: Rng, read: Read): Action {
@@ -266,7 +267,8 @@ function knowItAll(v: PlayerView, peek: Peek, rng: Rng): Action {
 
   const raise = trucoCall(v)
   if (top?.kind === BET.truco) {
-    if (raise && (winsRound || lastStand(v, v.me))) return raise
+    // A won truco is raised at once only now and then: a quiero keeps the raise his, for later
+    if (raise && (lastStand(v, v.me) || (winsRound && rng() < RAISE_AT_ONCE))) return raise
     const declineLosesMatch = v.score[opp] + v.trucoLevel + 1 >= WIN
     return winsRound || declineLosesMatch ? find(v, 'accept')! : find(v, 'decline')!
   }
