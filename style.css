@@ -120,3 +120,9 @@ dialog::backdrop { background: rgb(0 0 0 / .6); }
 .builder .knob span:last-child { text-align: right; }
 .builder .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .builder .row form { margin: 0; }
+
+.lobby .my-name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.lobby .my-name input { min-height: 44px; width: 12em; border: 0; border-radius: 10px; padding: 0 10px; background: var(--paper); color: #222; font: inherit; }
+.lobby .qr svg { display: block; width: min(240px, 70vw); height: auto; background: #fff; border-radius: 8px; }
+.lobby .link { color: var(--accent); font-size: 14px; word-break: break-all; }
+.panel button:disabled { opacity: .7; }

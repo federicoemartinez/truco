@@ -32,6 +32,25 @@ export const T = {
   won: (mine: number, theirs: number) => `¡Ganaste ${mine} a ${theirs}!`,
   lost: (rival: string, mine: number, theirs: number) => `Ganó ${rival} ${theirs} a ${mine}`,
   trick: ['1ª', '2ª', '3ª'],
+  friend: 'Jugar con un amigo',
+  resume: (name: string) => `Seguir el partido con ${name}`,
+  yourName: 'Tu nombre',
+  sendLink: 'Mandale este link a tu amigo y dejá esta pantalla abierta hasta que entre.',
+  share: 'Compartir',
+  copy: 'Copiar link',
+  copied: '¡Copiado!',
+  waitingFriend: 'Esperando a tu amigo…',
+  waitingFor: (name: string) => `Esperando a ${name}…`,
+  back: 'Volver',
+  invited: 'Te invitaron a jugar al truco',
+  enter: 'Entrar',
+  connecting: 'Buscando a tu amigo…',
+  busy: 'Esa sala está ocupada',
+  toMenu: 'Ir al menú',
+  paused: (name: string) => `${name} se desconectó. Esperando que vuelva…`,
+  left: (name: string) => `${name} dejó el partido`,
+  quit: 'Abandonar',
+  someone: 'Tu amigo', // a friend whose name came empty
 }
 
 // In the menu's order: the easiest to read first

@@ -110,8 +110,11 @@ mount(document.getElementById('app')!, {
   onMenu: () => {
     clearTimeout(cpuTimer)
     voice.stop()
-    showMenu(notebook, custom, luck)
+    showMenu(notebook, custom, luck, null)
   },
+  onFriend: () => {},
+  onEnter: () => {},
+  onName: () => {},
 })
-showMenu(notebook, custom, luck)
+showMenu(notebook, custom, luck, null)
 initInstall(refreshInstall)

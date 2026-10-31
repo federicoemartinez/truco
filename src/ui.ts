@@ -8,6 +8,7 @@ import { BRIGHT, RATE, TRAITS, pointOf, valueAt } from './custom.ts'
 import type { Character } from './custom.ts'
 import { isMuted, preview, toggleMute } from './voice.ts'
 import { canInstall, install } from './install.ts'
+import qrcode from 'qrcode-generator'
 
 export type Handlers = {
   onStart(rival: Rival | Character): void
@@ -16,7 +17,14 @@ export type Handlers = {
   onNextRound(): void
   onRematch(): void
   onMenu(): void
+  onFriend(): void
+  onEnter(name: string): void
+  onName(name: string): void
 }
+
+// What the table says about a friend: you're waiting for their "next", they dropped, or they left
+export type Notice = 'waiting' | 'paused' | 'left' | null
+export type GuestStatus = 'idle' | 'connecting' | 'busy'
 
 type PlayEvent = Extract<GameEvent, { type: 'play' }>
 
@@ -41,6 +49,9 @@ export function mount(el: HTMLElement, h: Handlers) {
       case 'rules': return root.querySelector<HTMLDialogElement>('#rules')!.showModal()
       case 'knows': return root.querySelector<HTMLDialogElement>('#knows')!.showModal()
       case 'install': return void install().then(refreshInstall)
+      case 'friend': return h.onFriend()
+      case 'enter': return h.onEnter(root.querySelector<HTMLInputElement>('#my-name')!.value)
+      case 'share': return void share(root.querySelector<HTMLAnchorElement>('.lobby .link')!.href, target!)
       case 'custom': return root.querySelector<HTMLDialogElement>('#custom')!.showModal()
       case 'listen': return preview(built().voice)
       case 'play': {
@@ -68,8 +79,9 @@ export function mount(el: HTMLElement, h: Handlers) {
   })
 
   root.addEventListener('change', (e) => {
-    const select = e.target as HTMLSelectElement
-    if (select.id === 'luck') h.onLuck(select.value as LuckLevel)
+    const field = e.target as HTMLInputElement | HTMLSelectElement
+    if (field.id === 'luck') h.onLuck(field.value as LuckLevel)
+    if (field.id === 'my-name') h.onName(field.value)
   })
 
   // The hexagon's handles: dragged with a finger or the mouse, or moved with the arrow keys
@@ -163,7 +175,7 @@ function builderHtml(c: Character): string {
 // The player's own rival name ends up in the page: never as markup
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => `&#${ch.charCodeAt(0)};`)
 
-export function showMenu(known: Notebook, custom: Character, luck: LuckLevel) {
+export function showMenu(known: Notebook, custom: Character, luck: LuckLevel, resumeWith: string | null) {
   current = null
   draft = { ...custom.params }
   lastRender = performance.now()
@@ -178,6 +190,7 @@ export function showMenu(known: Notebook, custom: Character, luck: LuckLevel) {
           <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
         <button class="rival" data-do="custom"><strong>${esc(custom.name || T.custom)}</strong><small>${T.customMotto}</small></button>
       </div>
+      <button data-do="friend">${resumeWith ? T.resume(esc(resumeWith)) : T.friend}</button>
       <label class="luck">${T.luck} <select id="luck">${LUCK_LEVELS.map((level) =>
         `<option value="${level}"${level === luck ? ' selected' : ''}>${LUCK_LABEL[level]}</option>`).join('')}</select></label>
       <button data-do="rules">${T.rules}</button>
@@ -195,7 +208,58 @@ export function refreshInstall() {
   root.querySelector('[data-do="install"]')?.toggleAttribute('hidden', !canInstall())
 }
 
-export function renderGame(v: PlayerView, name: string) {
+const nameField = (name: string) =>
+  `<label class="my-name">${T.yourName} <input id="my-name" maxlength="24" autocomplete="nickname" value="${esc(name)}"></label>`
+
+// Where the host sends the link from: a QR for a friend at the table, Compartir for one far away
+export function showHostLobby(link: string, name: string, waitingFor: string | null) {
+  current = null
+  lastRender = performance.now()
+  const qr = qrcode(0, 'M')
+  qr.addData(link)
+  qr.make()
+  root.innerHTML = `
+    <main class="menu lobby">
+      <h2>${T.friend}</h2>
+      ${nameField(name)}
+      <p>${T.sendLink}</p>
+      <div class="qr">${qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true })}</div>
+      <a class="link" href="${esc(link)}">${esc(link)}</a>
+      <button class="primary" data-do="share">${'share' in navigator ? T.share : T.copy}</button>
+      <p class="status">${waitingFor ? T.waitingFor(esc(waitingFor)) : T.waitingFriend}</p>
+      <button data-do="menu">${T.back}</button>
+    </main>`
+}
+
+// What the friend sees on opening the link
+export function showGuestLobby(name: string, status: GuestStatus) {
+  current = null
+  lastRender = performance.now()
+  root.innerHTML = `
+    <main class="menu lobby">
+      <h2>${T.invited}</h2>
+      ${nameField(name)}
+      ${status === 'idle' ? `<button class="primary" data-do="enter">${T.enter}</button>` : ''}
+      ${status === 'connecting' ? `<p class="status">${T.connecting}</p>` : ''}
+      ${status === 'busy' ? `<p class="status">${T.busy}</p>` : ''}
+      <button data-do="menu">${T.toMenu}</button>
+    </main>`
+}
+
+// The phone's own share sheet (WhatsApp and the rest), or the clipboard where there is none
+async function share(link: string, button: HTMLElement) {
+  try {
+    if (typeof navigator.share === 'function') await navigator.share({ url: link })
+    else {
+      await navigator.clipboard.writeText(link)
+      button.textContent = T.copied
+    }
+  } catch {
+    // the player closed the share sheet, or the clipboard was refused: the link is on screen anyway
+  }
+}
+
+export function renderGame(v: PlayerView, name: string, notice: Notice = null) {
   current = v
   rivalName = esc(name)
   lastRender = performance.now()
@@ -260,7 +324,7 @@ export function renderGame(v: PlayerView, name: string) {
       ${bubble(v.me, 'bubble-row mine')}
       <section class="hand">${hand}</section>
       <nav class="actions">${buttons}</nav>
-      ${overlay(v)}
+      ${overlay(v, notice)}
     </main>`
 
   seen = { round: v.round, plays: plays.length, bubbles }
@@ -281,11 +345,18 @@ function bubbleText(v: PlayerView, p: Player): string | null {
   return said.length ? said.join(' ') : null
 }
 
-function overlay(v: PlayerView): string {
+function overlay(v: PlayerView, notice: Notice): string {
+  if (notice === 'paused' || notice === 'left') {
+    return `<div class="overlay"><div class="panel">
+      <p>${notice === 'paused' ? T.paused(rivalName) : T.left(rivalName)}</p>
+      <button${notice === 'left' ? ' class="primary"' : ''} data-do="menu">${notice === 'paused' ? T.quit : T.menu}</button>
+    </div></div>`
+  }
+  const waiting = notice === 'waiting' ? `<button class="primary" disabled>${T.waitingFor(rivalName)}</button>` : ''
   if (v.phase === 'roundOver') {
     return `<div class="overlay"><div class="panel">
       <p>${roundSummary(v.log, v.me, rivalName)}</p>
-      <button class="primary" data-do="next">${T.nextRound}</button>
+      ${waiting || `<button class="primary" data-do="next">${T.nextRound}</button>`}
     </div></div>`
   }
   if (v.phase === 'matchOver') {
@@ -294,7 +365,7 @@ function overlay(v: PlayerView): string {
     return `<div class="overlay"><div class="panel">
       <h2>${v.winner === v.me ? T.won(mine, theirs) : T.lost(rivalName, mine, theirs)}</h2>
       <p>${roundSummary(v.log, v.me, rivalName)}</p>
-      <button class="primary" data-do="rematch">${T.rematch}</button>
+      ${waiting || `<button class="primary" data-do="rematch">${T.rematch}</button>`}
       <button data-do="menu">${T.menu}</button>
     </div></div>`
   }
