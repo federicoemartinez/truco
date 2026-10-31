@@ -38,7 +38,7 @@ export const RIVALS: Record<Rival, { name: string; motto: string }> = {
   ramon: { name: 'Ramón Mentirón', motto: 'Miente como respira' },
   john: { name: 'John Bonachón', motto: 'Si canta, es porque tiene' },
   bruno: { name: 'Bruno Aprendiz', motto: 'Te va tomando el tiempo' },
-  arnaldo: { name: 'Arnaldo Terminador', motto: 'Ve tus cartas. Hasta la vista, mano' },
+  arnaldo: { name: 'Arnaldo Terminador', motto: 'Hasta la vista, mano' },
 }
 
 export const LUCK_LABEL: Record<LuckLevel, string> = {
