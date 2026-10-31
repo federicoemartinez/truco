@@ -233,6 +233,22 @@ test("a proof relayed from another connection doesn't verify", async () => {
   assert.deepEqual(verified, [])
 })
 
+test('a closing channel on greet is caught, not left as an unhandled rejection', async () => {
+  const me = await newIdentity()
+  const link: Link = { send: () => Promise.reject(new Error('closed')), fingerprints: () => null }
+  const gate = createGate(me, () => 'Fede', link, { verified: () => {}, message: () => {} })
+  let caught = false
+  const onUnhandled = () => (caught = true)
+  process.on('unhandledRejection', onUnhandled)
+  try {
+    await gate.join('b')
+    await new Promise((resolve) => setImmediate(resolve)) // let the rejected send settle
+  } finally {
+    process.off('unhandledRejection', onUnhandled)
+  }
+  assert.equal(caught, false)
+})
+
 test('a peer that sends a second introduction keeps the first', async () => {
   const [host, guest] = await Promise.all([newIdentity(), newIdentity()])
   const names: string[] = []

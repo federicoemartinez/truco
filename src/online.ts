@@ -269,7 +269,7 @@ export function createGate(me: Identity, name: () => string, link: Link, on: {
     if (!p) {
       p = { nonce: newNonce(), verified: false }
       peers.set(peer, p)
-      void link.send({ type: 'hello', key: me.publicKey, name: name(), nonce: p.nonce }, peer)
+      void Promise.resolve(link.send({ type: 'hello', key: me.publicKey, name: name(), nonce: p.nonce }, peer)).catch((err) => console.warn(err))
     }
     return p
   }

@@ -25,6 +25,7 @@ const MATCH_KEY = 'truco:online'
 export const myName = () => load(NAME_KEY) ?? ''
 export const setName = (name: string) => save(NAME_KEY, name)
 export const savedMatch = () => matchFromSaved(load(MATCH_KEY))
+export const forgetMatch = () => drop(MATCH_KEY)
 
 // Fire-and-forget sends: the channel can close mid-send, and nothing here awaits the result
 const tell = (msg: Msg, to: string) => void Promise.resolve(net?.send(msg, to)).catch((err) => console.warn(err))
@@ -37,11 +38,13 @@ let friendName = ''
 let notice: Notice = null
 let started = false // the table was on screen: leaving now ends the match
 let match: Match | null = null // host only
+let myIdentity: Identity | null = null // set on connect: who we are, to spot our own hello coming back
 let roomId = '' // guest only
 let seen: PlayerView | null = null // guest only: the last view drawn
 
 function connect(me: Identity, room: string) {
   leave()
+  myIdentity = me
   const n = joinTable(room, {
     join: (p) => void (net === n && gate?.join(p)),
     leave: (p) => {
@@ -74,6 +77,7 @@ async function verified(p: string, hello: Hello) {
     draw()
     return
   }
+  if (hello.key === myIdentity?.publicKey) return // our own other tab/app opening our own link: not a guest
   switch (seat(match?.guestKey ?? null, hello.key)) {
     case 'busy':
       tell({ type: 'busy' }, p)
@@ -206,10 +210,10 @@ export function nextRound() {
 
 // Leaving the table on purpose: tell the friend, and a match left halfway is over. Leaving the lobby
 // before playing keeps a saved match for later
-export async function quit() {
+export function quit() {
   const n = net, p = peer
   if (started && role === 'host') drop(MATCH_KEY)
   net = null; gate = null; peer = null; match = null; seen = null
-  if (n && p) await Promise.resolve(n.send({ type: 'bye' }, p)).catch((err) => console.warn(err))
+  if (n && p) void Promise.resolve(n.send({ type: 'bye' }, p)).catch((err) => console.warn(err))
   n?.leave()
 }

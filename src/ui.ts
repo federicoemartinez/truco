@@ -18,13 +18,14 @@ export type Handlers = {
   onRematch(): void
   onMenu(): void
   onFriend(): void
+  onResume(): void
   onEnter(name: string): void
   onName(name: string): void
 }
 
 // What the table says about a friend: you're waiting for their "next", they dropped, or they left
 export type Notice = 'waiting' | 'paused' | 'left' | null
-export type GuestStatus = 'idle' | 'connecting' | 'busy'
+export type GuestStatus = 'idle' | 'connecting' | 'busy' | 'unsupported'
 
 type PlayEvent = Extract<GameEvent, { type: 'play' }>
 
@@ -50,6 +51,7 @@ export function mount(el: HTMLElement, h: Handlers) {
       case 'knows': return root.querySelector<HTMLDialogElement>('#knows')!.showModal()
       case 'install': return void install().then(refreshInstall)
       case 'friend': return h.onFriend()
+      case 'resume': return h.onResume()
       case 'enter': return h.onEnter(root.querySelector<HTMLInputElement>('#my-name')!.value)
       case 'share': return void share(root.querySelector<HTMLAnchorElement>('.lobby .link')!.href, target!)
       case 'custom': return root.querySelector<HTMLDialogElement>('#custom')!.showModal()
@@ -184,19 +186,29 @@ export function showMenu(known: Notebook, custom: Character, luck: LuckLevel, re
     <main class="menu">
       <h1>${T.title}</h1>
       <p>${T.subtitle}</p>
-      <p>${T.chooseRival}</p>
-      <div class="rivals">
-        ${Object.entries(RIVALS).map(([id, r]) => `<button class="rival${id === 'aristoteles' ? ' primary' : ''}" data-do="start" data-rival="${id}">
-          <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
-        <button class="rival" data-do="custom"><strong>${esc(custom.name || T.custom)}</strong><small>${T.customMotto}</small></button>
-      </div>
-      <button data-do="friend">${resumeWith ? T.resume(esc(resumeWith)) : T.friend}</button>
-      <label class="luck">${T.luck} <select id="luck">${LUCK_LEVELS.map((level) =>
-        `<option value="${level}"${level === luck ? ' selected' : ''}>${LUCK_LABEL[level]}</option>`).join('')}</select></label>
-      <button data-do="rules">${T.rules}</button>
-      <button data-do="knows">${T.knows}</button>
-      <button data-do="install"${canInstall() ? '' : ' hidden'}>${T.install}</button>
-      ${muteButton()}
+      <section class="menu-section">
+        <h2>${T.vsMachine}</h2>
+        <div class="rivals">
+          ${Object.entries(RIVALS).map(([id, r]) => `<button class="rival${id === 'aristoteles' ? ' primary' : ''}" data-do="start" data-rival="${id}">
+            <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
+          <button class="rival" data-do="custom"><strong>${esc(custom.name || T.custom)}</strong><small>${T.customMotto}</small></button>
+        </div>
+        <label class="luck">${T.luck} <select id="luck">${LUCK_LEVELS.map((level) =>
+          `<option value="${level}"${level === luck ? ' selected' : ''}>${LUCK_LABEL[level]}</option>`).join('')}</select></label>
+        <button data-do="knows">${T.knows}</button>
+      </section>
+      <section class="menu-section">
+        <h2>${T.vsFriend} <small class="tag">${T.experimental}</small></h2>
+        ${resumeWith ? `<button data-do="resume">${T.resume(esc(resumeWith))}</button>` : ''}
+        <button data-do="friend">${T.otherFriend}</button>
+      </section>
+      <section class="menu-section">
+        <h2>${T.help}</h2>
+        <button data-do="rules">${T.rules}</button>
+        <button data-do="install"${canInstall() ? '' : ' hidden'}>${T.install}</button>
+        ${muteButton()}
+        <a class="donate" href="https://cafecito.app/federicoemartinez" target="_blank" rel="noopener">${T.donate}</a>
+      </section>
       <dialog id="rules">${RULES_HTML}<form method="dialog"><button>${T.close}</button></form></dialog>
       <dialog id="knows">${knowledgeHtml(known)}<form method="dialog"><button>${T.close}</button></form></dialog>
       ${builderHtml(custom)}
@@ -242,6 +254,7 @@ export function showGuestLobby(name: string, status: GuestStatus) {
       ${status === 'idle' ? `<button class="primary" data-do="enter">${T.enter}</button>` : ''}
       ${status === 'connecting' ? `<p class="status">${T.connecting}</p>` : ''}
       ${status === 'busy' ? `<p class="status">${T.busy}</p>` : ''}
+      ${status === 'unsupported' ? `<p class="status">${T.unsupported}</p>` : ''}
       <button data-do="menu">${T.toMenu}</button>
     </main>`
 }

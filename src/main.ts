@@ -55,7 +55,16 @@ async function playFriend(guestOf: string | null) {
   voice.stop()
   voice.unlock()
   const t = ++ticket
-  const id = await me()
+  let id: Identity
+  try {
+    id = await me()
+  } catch (err) {
+    identity = undefined // the cached rejection would fail every later try too
+    online = false
+    console.error(err)
+    if (t === ticket) showGuestLobby(friend.myName(), 'unsupported') // a stale failure must not draw
+    return
+  }
   if (t !== ticket) return // the player tapped something else meanwhile
   online = true
   if (guestOf && guestOf !== id.id) friend.guest(id, guestOf)
@@ -146,12 +155,16 @@ mount(document.getElementById('app')!, {
     voice.stop()
     if (online) {
       online = false
-      void friend.quit()
-      history.replaceState(null, '', location.pathname) // no invitation left in the address bar
+      friend.quit()
     }
+    history.replaceState(null, '', location.pathname) // no invitation left in the address bar
     menu()
   },
-  onFriend: () => void playFriend(null),
+  onFriend: () => {
+    friend.forgetMatch() // starting fresh: the old guest isn't coming back
+    void playFriend(null)
+  },
+  onResume: () => void playFriend(null),
   onEnter: (name) => {
     friend.setName(name)
     showGuestLobby(name, 'connecting')

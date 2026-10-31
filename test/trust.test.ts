@@ -15,6 +15,7 @@ test('the id is the hash of the public key', async () => {
   assert.match(me.id, ID_PATTERN)
   assert.equal(me.id, await idOf(me.publicKey))
   assert.notEqual(me.id, (await newIdentity()).id)
+  assert.equal(me.privateKey.extractable, false)
   assert.equal(newNonce().length, NONCE_LENGTH)
 })
 
