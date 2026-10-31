@@ -285,12 +285,15 @@ function knowItAll(v: PlayerView, peek: Peek, rng: Rng): Action {
   const now = !beforeFirstCard(v) || rng() < EARLY_TRUCO
   if (raise && (lastStand(v, v.me) || (now && (winsRound || theyFeelWeak())))) return raise
 
-  // Both playing their best: the cheapest card that takes the round, else the cheapest one
-  const play = (card: Card): Action => ({ type: 'play', card })
+  // Past the first trick, the card anyone would play if it takes the round too: a second parda kept to
+  // win the third with la mejor only works seeing the last card. Else, and in the first trick, where a low
+  // card hides a strong hand, the cheapest card that takes it, else the cheapest one
+  const wins = (card: Card) => playoutAfter(card, hands, results, table, v.me, v.firstPlayer) === v.me
+  const usual = v.tricks.length > 1 ? chooseCard(v) : undefined
+  if (usual?.type === 'play' && wins(usual.card)) return usual
   const weakestFirst = [...v.hand].sort((a, b) => cardPower(a) - cardPower(b))
-  const winning = weakestFirst.find((card) => playoutAfter(card, hands, results, table, v.me, v.firstPlayer) === v.me)
   // ponytail: a lost round is played out with the lowest card; picking the one that leaves the rival the most ways to slip would squeeze more
-  return play(winning ?? weakestFirst[0])
+  return { type: 'play', card: weakestFirst.find(wins) ?? weakestFirst[0] }
 }
 
 // The rival's own view at that moment, given the cards they hold

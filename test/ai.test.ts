@@ -259,3 +259,15 @@ test('Arnaldo bets the envido like his own points would: a quiero on 7, an envid
     assert.deepEqual(chooseAction(view(asMano, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(asMano)), call(CALL.envido)) // not the real that tempts 28
   }
 })
+
+test('after a parda Arnaldo plays la mejor, not a second parda that only wins because he sees the last card', () => {
+  const human = [c(3, SUIT.swords), c(12, SUIT.coins), c(4, SUIT.clubs)]
+  const cpu = [c(3, SUIT.cups), c(12, SUIT.cups), c(1, SUIT.swords)]
+  const s = run(setup(human, cpu, { envidoDone: true, trucoLevel: 1, raiseRights: 0 }), [ // only the card left to choose
+    [0, play(c(3, SUIT.swords))], [1, play(c(3, SUIT.cups))], // parda
+    [0, play(c(12, SUIT.coins))],
+  ])
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepEqual(chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)), play(c(1, SUIT.swords)))
+  }
+})
