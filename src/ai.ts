@@ -1,5 +1,5 @@
 import {
-  BET, CALL, WIN, cardPower, envidoAcceptedPoints, envidoDeclinedPoints, envidoPoints, faltaPoints, isEnvido, newDeck, other, roundWinner, sameCard, shuffle, trickWinner,
+  BET, CALL, ENVIDO_CALLS, WIN, cardPower, envidoAcceptedPoints, envidoDeclinedPoints, envidoPoints, faltaPoints, isEnvido, newDeck, other, roundWinner, sameCard, shuffle, trickWinner,
 } from './engine.ts'
 import type { Action, Call, Card, EnvidoCall, Player, PlayerView, Rng } from './engine.ts'
 
@@ -95,6 +95,7 @@ function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefine
 }
 
 const EARLY_TRUCO = 0.25 // how often a truco comes before the singer's first card
+const ENVIDO_LIE = 0.25 // how often Arnaldo sings an envido on poor points, when it can't cost him
 const RAISE_AT_ONCE = 0.35 // how often Arnaldo answers a truco he wins with a raise instead of a quiero
 const beforeFirstCard = (v: PlayerView) => v.tricks.length === 1 && v.tricks[0].cards[v.me] === null
 
@@ -245,6 +246,10 @@ function knowItAll(v: PlayerView, peek: Peek, rng: Rng): Action {
   const played = peek.dealt.filter((card) => !peek.hand.some((h) => sameCard(h, card)))
   const theyFeelWeak = () => winChance(asSeenByRival(v, peek.hand, played), rng) < 0.5
 
+  // He bets the envido no bigger than his own points would, as if he saw only his cards: a falta on 7
+  // that wins would give him away. What he sees of theirs only keeps him out of the envidos he loses
+  const credible = mine >= 32 ? CALL.faltaEnvido : mine >= 30 ? CALL.realEnvido : CALL.envido
+  const fits = (c: EnvidoCall) => ENVIDO_CALLS.indexOf(c) <= ENVIDO_CALLS.indexOf(credible)
   const top = v.pending.at(-1)
   if (top?.kind === BET.envido) {
     if (!winsEnvido) return v.score[opp] + envidoDeclinedPoints(v.envidoCalls) >= WIN ? find(v, 'accept')! : find(v, 'decline')!
@@ -253,16 +258,19 @@ function knowItAll(v: PlayerView, peek: Peek, rng: Rng): Action {
     let best = find(v, 'accept')!
     let most = worth(v.envidoCalls)
     for (const a of v.legal) {
-      if (a.type === 'call' && isEnvido(a.call) && worth([...v.envidoCalls, a.call]) > most) [best, most] = [a, worth([...v.envidoCalls, a.call])]
+      if (a.type === 'call' && isEnvido(a.call) && a.call !== CALL.envido && fits(a.call) && worth([...v.envidoCalls, a.call]) > most) {
+        [best, most] = [a, worth([...v.envidoCalls, a.call])]
+      }
     }
     return best
   }
 
-  // El envido está primero: sing it when it's won, the bigger the more the rival has to accept it with;
-  // when it's lost, only against so few points that they'll turn it down
+  // El envido está primero: sung on good points when won, the bigger the more the rival has to accept it
+  // with; on poor points, only now and then as a lie that can't cost him: won, or against too few to accept
   if (find(v, 'call', CALL.envido)) {
-    if (winsEnvido) return find(v, 'call', theirs >= 31 ? CALL.faltaEnvido : theirs >= 28 ? CALL.realEnvido : CALL.envido)!
-    if (theirs < 24) return find(v, 'call', CALL.envido)!
+    const tempting = theirs >= 31 ? CALL.faltaEnvido : theirs >= 28 ? CALL.realEnvido : CALL.envido
+    if (winsEnvido && mine >= 27) return find(v, 'call', fits(tempting) ? tempting : credible)!
+    if (mine < 27 && (winsEnvido || theirs < 24) && rng() < ENVIDO_LIE) return find(v, 'call', CALL.envido)!
   }
 
   const raise = trucoCall(v)

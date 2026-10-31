@@ -250,3 +250,12 @@ test('Arnaldo wants an envido he wins on 25 and turns down one he loses on 31', 
     assert.deepEqual(chooseAction(view(loses, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(loses)), DECLINE)
   }
 })
+
+test('Arnaldo bets the envido like his own points would: a quiero on 7, an envido on 29', () => {
+  const sung = run(setup([c(5, SUIT.coins), c(12, SUIT.cups), c(4, SUIT.swords)], [c(7, SUIT.clubs), c(11, SUIT.cups), c(2, SUIT.swords)]), [[0, call(CALL.envido)]])
+  const asMano = setup([c(5, SUIT.coins), c(3, SUIT.coins), c(12, SUIT.cups)], [c(6, SUIT.swords), c(3, SUIT.swords), c(4, SUIT.cups)], { firstPlayer: 1, turn: 1, resumeTurn: 1 })
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepEqual(chooseAction(view(sung, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(sung)), ACCEPT) // not the falta that beats 5
+    assert.deepEqual(chooseAction(view(asMano, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(asMano)), call(CALL.envido)) // not the real that tempts 28
+  }
+})
