@@ -5,10 +5,15 @@ import { fromSaved as characterFromSaved } from './custom.ts'
 import type { Character } from './custom.ts'
 import { fromSaved, learnFromRound, noteCall, readOf, toSaved } from './learn.ts'
 import type { Notebook } from './learn.ts'
-import { mount, refreshInstall, renderGame, showMenu } from './ui.ts'
+import { mount, refreshInstall, renderGame, showGuestLobby, showMenu } from './ui.ts'
 import { initInstall } from './install.ts'
 import { RIVALS } from './texts.ts'
 import * as voice from './voice.ts'
+import { load, save } from './storage.ts'
+import * as friend from './friend.ts'
+import { forgetRelays, parseRelays, saveRelays } from './turn.ts'
+import { ID_PATTERN, loadIdentity } from './trust.ts'
+import type { Identity } from './trust.ts'
 
 const HUMAN: Player = 0
 const CPU: Player = 1
@@ -31,20 +36,40 @@ const LUCK_KEY = 'truco:luck'
 const savedLuck = load(LUCK_KEY)
 let luck: LuckLevel = LUCK_LEVELS.find((level) => level === savedLuck) ?? LUCK.balanced
 
-function load(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null // storage blocked: keep it within this page only
-  }
-}
+// Against a friend instead of the CPU (see friend.ts)
+let online = false
+let identity: Promise<Identity> | undefined
+const me = () => (identity ??= loadIdentity())
 
-function save(key: string, value: string) {
+// A friend's invitation: ?sala=<their id>
+const room = new URLSearchParams(location.search).get('sala')
+const invited = room !== null && ID_PATTERN.test(room)
+
+const menu = () => showMenu(notebook, custom, luck, friend.savedMatch()?.guestName ?? null)
+
+// Guards against the player going elsewhere (a CPU rival, the menu) while loadIdentity() is pending
+let ticket = 0
+
+// From a tap: the voices unlock now, before waiting for the keys
+async function playFriend(guestOf: string | null) {
+  clearTimeout(cpuTimer)
+  voice.stop()
+  voice.unlock()
+  const t = ++ticket
+  let id: Identity
   try {
-    localStorage.setItem(key, value)
-  } catch {
-    // storage blocked or full: keep it in memory
+    id = await me()
+  } catch (err) {
+    identity = undefined // the cached rejection would fail every later try too
+    online = false
+    console.error(err)
+    if (t === ticket) showGuestLobby(friend.myName(), 'unsupported') // a stale failure must not draw
+    return
   }
+  if (t !== ticket) return // the player tapped something else meanwhile
+  online = true
+  if (guestOf && guestOf !== id.id) friend.guest(id, guestOf)
+  else friend.host(id) // our own link opens our own room
 }
 
 function learn() {
@@ -98,6 +123,7 @@ function startMatch() {
 
 mount(document.getElementById('app')!, {
   onStart: (picked) => {
+    ticket++
     voice.unlock()
     peeks = picked === 'arnaldo'
     if (typeof picked === 'string') {
@@ -113,20 +139,51 @@ mount(document.getElementById('app')!, {
     save(LUCK_KEY, luck)
   },
   onAction: (action) => {
+    if (online) return friend.action(action)
     notebook = noteCall(notebook, view(state, CPU), action)
     act(HUMAN, action)
     update()
   },
   onNextRound: () => {
+    if (online) return friend.nextRound()
     state = startRound(state, Math.random)
     update()
   },
-  onRematch: startMatch,
+  onRematch: () => (online ? friend.nextRound() : startMatch()),
   onMenu: () => {
+    ticket++
     clearTimeout(cpuTimer)
     voice.stop()
-    showMenu(notebook, custom, luck)
+    if (online) {
+      online = false
+      friend.quit()
+    }
+    history.replaceState(null, '', location.pathname) // no invitation left in the address bar
+    menu()
+  },
+  onFriend: () => {
+    friend.forgetMatch() // starting fresh: the old guest isn't coming back
+    void playFriend(null)
+  },
+  onResume: () => void playFriend(null),
+  onEnter: (name) => {
+    friend.setName(name)
+    showGuestLobby(name, 'connecting')
+    void playFriend(room)
+  },
+  onName: friend.setName,
+  onRelaySave: (text) => {
+    const relays = parseRelays(text)
+    if (!relays) return false
+    saveRelays(relays)
+    friend.reconnect()
+    return true
+  },
+  onRelayForget: () => {
+    forgetRelays()
+    friend.reconnect()
   },
 })
-showMenu(notebook, custom, luck)
+if (invited) showGuestLobby(friend.myName(), 'idle')
+else menu()
 initInstall(refreshInstall)

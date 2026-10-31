@@ -5,11 +5,14 @@ import type { Notebook } from './learn.ts'
 
 export const T = {
   title: 'Truco',
-  subtitle: 'Mano a mano contra la máquina',
-  chooseRival: 'Elegí tu rival',
+  subtitle: 'Truco argentino, mano a mano',
+  vsMachine: 'Contra la máquina',
+  vsFriend: 'Contra un amigo',
+  help: 'Ayuda',
   rules: 'Cómo se juega',
   knows: 'Lo que Bruno sabe de vos',
   install: 'Instalalo en tu celu',
+  donate: '¿Te gustó? Invitame un cafecito ☕',
   close: 'Cerrar',
   you: 'Vos',
   thinking: 'Pensando…',
@@ -32,7 +35,44 @@ export const T = {
   won: (mine: number, theirs: number) => `¡Ganaste ${mine} a ${theirs}!`,
   lost: (rival: string, mine: number, theirs: number) => `Ganó ${rival} ${theirs} a ${mine}`,
   trick: ['1ª', '2ª', '3ª'],
+  friend: 'Jugar con un amigo',
+  otherFriend: 'Nuevo partido contra un amigo',
+  experimental: 'experimental',
+  resume: (name: string) => `Continuar el partido contra ${name}`,
+  yourName: 'Tu nombre',
+  sendLink: 'Mandale este link a tu amigo y dejá esta pantalla abierta hasta que entre.',
+  share: 'Compartir',
+  copy: 'Copiar link',
+  copied: '¡Copiado!',
+  waitingFriend: 'Esperando a tu amigo…',
+  waitingFor: (name: string) => `Esperando a ${name}…`,
+  back: 'Volver',
+  invited: 'Te invitaron a jugar al truco',
+  enter: 'Entrar',
+  connecting: 'Buscando a tu amigo…',
+  busy: 'Esa sala está ocupada',
+  unsupported: 'Este navegador no puede jugar online. Abrí el juego con https.',
+  toMenu: 'Ir al menú',
+  paused: (name: string) => `${name} se desconectó. Esperando que vuelva…`,
+  left: (name: string) => `${name} dejó el partido`,
+  quit: 'Abandonar',
+  someone: 'Tu amigo', // a friend whose name came empty
+  cantFind: '¿No se encuentran?',
+  sameWifi: 'Si están en el mismo wifi, es posible que uno necesite usar datos móviles.',
+  relayIntro: 'Si igual no se encuentran, pueden usar un servidor TURN externo, que pasa los datos cuando no hay camino directo. Algunos dan uno gratis:',
+  relayPaste: 'Pegá acá lo que te da (URLs, usuario y contraseña, en JSON):',
+  relayOnlyHere: 'Se guarda solo en este navegador. Alcanza con que lo configure uno de los dos.',
+  relayUsing: (url: string) => `Usando tu servidor: ${url}`,
+  relayBad: 'Eso no parece la configuración de un servidor TURN.',
+  relaySave: 'Guardar',
+  relayForget: 'Borrar',
 }
+
+// Where to get a free TURN relay of your own: the game offers none
+export const RELAY_PROVIDERS = [
+  { name: 'Metered', url: 'https://www.metered.ca/stun-turn' },
+  { name: 'Cloudflare', url: 'https://developers.cloudflare.com/realtime/turn/' },
+]
 
 // In the menu's order: the easiest to read first
 export const RIVALS: Record<Rival, { name: string; motto: string }> = {

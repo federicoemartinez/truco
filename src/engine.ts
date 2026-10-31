@@ -280,7 +280,7 @@ export function envidoDeclinedPoints(calls: EnvidoCall[]): number {
   return Math.max(1, calls.slice(0, -1).reduce((sum, c) => sum + ENVIDO_VALUE[c], 0))
 }
 
-function sameAction(a: Action, b: Action): boolean {
+export function sameAction(a: Action, b: Action): boolean {
   if (a.type === 'play' && b.type === 'play') return sameCard(a.card, b.card)
   if (a.type === 'call' && b.type === 'call') return a.call === b.call
   return a.type === b.type
