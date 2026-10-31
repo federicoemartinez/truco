@@ -87,12 +87,15 @@ function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefine
   if (lastStand(v, v.me)) return raise
   // Hardly anyone sings truco before playing a card: even with a sure hand it pays to wait for the first
   // trick, so only now and then, and never as a bluff
-  if (v.tricks.length === 1 && v.tricks[0].cards[v.me] === null) {
-    return rng() < 0.25 && winChance(v, rng) >= 0.9 - 0.2 * params.aggression ? raise : undefined
+  if (beforeFirstCard(v)) {
+    return rng() < EARLY_TRUCO && winChance(v, rng) >= 0.9 - 0.2 * params.aggression ? raise : undefined
   }
   if (winChance(v, rng) >= 0.7 - 0.2 * params.aggression) return rng() < params.slowplay ? undefined : raise
   return bluffs(v, params, rng) ? raise : undefined
 }
+
+const EARLY_TRUCO = 0.25 // how often a truco comes before the singer's first card
+const beforeFirstCard = (v: PlayerView) => v.tricks.length === 1 && v.tricks[0].cards[v.me] === null
 
 function respondTruco(v: PlayerView, params: AiParams, rng: Rng, read: Read): Action {
   const envido = callEnvido(v, params, rng, false) // el envido está primero
@@ -267,7 +270,9 @@ function knowItAll(v: PlayerView, peek: Peek, rng: Rng): Action {
     const declineLosesMatch = v.score[opp] + v.trucoLevel + 1 >= WIN
     return winsRound || declineLosesMatch ? find(v, 'accept')! : find(v, 'decline')!
   }
-  if (raise && (winsRound || lastStand(v, v.me) || theyFeelWeak())) return raise
+  // Like anyone, he hardly sings before his first card, won or lied, so an early truco gives nothing away
+  const now = !beforeFirstCard(v) || rng() < EARLY_TRUCO
+  if (raise && (lastStand(v, v.me) || (now && (winsRound || theyFeelWeak())))) return raise
 
   // Both playing their best: the cheapest card that takes the round, else the cheapest one
   const play = (card: Card): Action => ({ type: 'play', card })

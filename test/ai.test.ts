@@ -195,10 +195,13 @@ test('Bruno accepts a liar\'s envido more and an honest rival\'s less; Aristóte
 const peek = (s: State) => ({ dealt: s.dealt[0], hand: s.hands[0] })
 const BRAVAS = [c(1, SUIT.swords), c(1, SUIT.clubs), c(7, SUIT.swords)]
 
-test('Arnaldo sings the truco on a round he cannot lose', () => {
-  const s = run(setup(WEAK, BRAVAS, { envidoDone: true }), [[0, play(c(4, SUIT.swords))]])
+test('Arnaldo sings the truco on a round he cannot lose, only now and then before his first card, like anyone', () => {
+  const early = run(setup(WEAK, BRAVAS, { envidoDone: true }), [[0, play(c(4, SUIT.swords))]])
+  const sung = Array.from({ length: 200 }, (_, seed) => chooseAction(view(early, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(early))).filter((a) => a.type === 'call').length
+  assert.ok(sung > 25 && sung < 80, `sang ${sung} of 200 before his first card`)
+  const later = run(early, [[1, play(c(7, SUIT.swords))]])
   for (let seed = 1; seed <= 50; seed++) {
-    assert.deepEqual(chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)), call(CALL.truco))
+    assert.deepEqual(chooseAction(view(later, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(later)), call(CALL.truco))
   }
 })
 
@@ -212,7 +215,7 @@ test('Arnaldo turns down a truco he is sure to lose, even with two 3s and a 2', 
 test('Arnaldo lies in the truco when the human thinks they are losing too', () => {
   const human = [c(5, SUIT.swords), c(6, SUIT.coins), c(4, SUIT.clubs)]
   const cpu = [c(4, SUIT.cups), c(5, SUIT.cups), c(4, SUIT.coins)] // loses every trick
-  const s = run(setup(human, cpu, { envidoDone: true }), [[0, play(c(6, SUIT.coins))]])
+  const s = run(setup(human, cpu, { envidoDone: true }), [[0, play(c(6, SUIT.coins))], [1, play(c(4, SUIT.cups))], [0, play(c(5, SUIT.swords))]])
   for (let seed = 1; seed <= 50; seed++) {
     assert.deepEqual(chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)), call(CALL.truco))
   }
