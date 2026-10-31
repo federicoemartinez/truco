@@ -36,7 +36,10 @@ button { font: inherit; cursor: pointer; }
   padding: 10px 16px; font-weight: 600; min-height: 44px;
 }
 .menu .primary, .panel .primary, .actions .accept { background: var(--accent); }
-.menu .rival { display: grid; gap: 2px; width: min(300px, 100%); }
+/* Two columns: every rival fits on a phone without scrolling */
+.menu .rivals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: min(440px, 100%); }
+.menu .rival { display: grid; align-content: center; gap: 2px; padding: 8px 10px; }
+.menu .rival small { font-size: 13px; }
 .menu .rival small { font-weight: 400; opacity: .85; }
 .menu .luck { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; font-weight: 600; }
 .menu .luck select { min-height: 44px; border: 0; border-radius: 10px; padding: 0 10px; background: var(--paper); color: #222; font: inherit; }

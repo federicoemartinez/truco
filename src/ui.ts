@@ -171,9 +171,11 @@ export function showMenu(known: Notebook, custom: Character, luck: LuckLevel) {
       <h1>${T.title}</h1>
       <p>${T.subtitle}</p>
       <p>${T.chooseRival}</p>
-      ${Object.entries(RIVALS).map(([id, r], k) => `<button class="rival${k === 0 ? ' primary' : ''}" data-do="start" data-rival="${id}">
-        <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
-      <button class="rival" data-do="custom"><strong>${esc(custom.name || T.custom)}</strong><small>${T.customMotto}</small></button>
+      <div class="rivals">
+        ${Object.entries(RIVALS).map(([id, r]) => `<button class="rival${id === 'aristoteles' ? ' primary' : ''}" data-do="start" data-rival="${id}">
+          <strong>${r.name}</strong><small>${r.motto}</small></button>`).join('')}
+        <button class="rival" data-do="custom"><strong>${esc(custom.name || T.custom)}</strong><small>${T.customMotto}</small></button>
+      </div>
       <label class="luck">${T.luck} <select id="luck">${LUCK_LEVELS.map((level) =>
         `<option value="${level}"${level === luck ? ' selected' : ''}>${LUCK_LABEL[level]}</option>`).join('')}</select></label>
       <button data-do="rules">${T.rules}</button>
