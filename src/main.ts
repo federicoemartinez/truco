@@ -7,7 +7,6 @@ import { fromSaved, learnFromRound, noteCall, readOf, toSaved } from './learn.ts
 import type { Notebook } from './learn.ts'
 import { mount, refreshInstall, renderGame, showMenu } from './ui.ts'
 import { initInstall } from './install.ts'
-import * as portal from './portal.ts'
 import { RIVALS } from './texts.ts'
 import * as voice from './voice.ts'
 
@@ -61,7 +60,6 @@ function learn() {
 function update() {
   if (state.phase !== 'playing') learn() // once per round: the next update comes after a new deal
   renderGame(view(state, HUMAN), rival.name)
-  if (state.phase === 'matchOver') portal.setPlaying(false)
   if (state.phase === 'playing' && state.turn === CPU) cpuTimer = window.setTimeout(cpuMove, 700 + Math.random() * 500)
 }
 
@@ -95,7 +93,6 @@ function startMatch() {
   voice.stop()
   state = newMatch(Math.random, { player: CPU, level: luck })
   notebook = { ...notebook, pending: [] } // calls noted in a round left halfway
-  portal.setPlaying(true)
   update()
 }
 
@@ -124,18 +121,12 @@ mount(document.getElementById('app')!, {
     state = startRound(state, Math.random)
     update()
   },
-  onRematch: async () => {
-    voice.stop() // no words over the ad
-    await portal.midgameAd()
-    startMatch()
-  },
+  onRematch: startMatch,
   onMenu: () => {
     clearTimeout(cpuTimer)
     voice.stop()
-    portal.setPlaying(false)
     showMenu(notebook, custom, luck)
   },
 })
 showMenu(notebook, custom, luck)
-portal.init()
 initInstall(refreshInstall)

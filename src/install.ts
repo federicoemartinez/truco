@@ -5,7 +5,7 @@ type InstallPrompt = Event & { prompt(): Promise<void> }
 let held: InstallPrompt | null = null
 
 export function initInstall(onChange: () => void) {
-  if (window.top !== window) return // inside a portal's iframe: their page, not ours to install
+  if (window.top !== window) return // inside someone else's iframe: their page, not ours to install
   if (!matchMedia('(pointer: coarse)').matches) return // a computer: a landscape window, where the game looks bad
   navigator.serviceWorker?.register('./sw.js').catch((err) => console.warn(err)) // undefined over plain http
   window.addEventListener('beforeinstallprompt', (e) => {
