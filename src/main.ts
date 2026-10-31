@@ -5,7 +5,8 @@ import { fromSaved as characterFromSaved } from './custom.ts'
 import type { Character } from './custom.ts'
 import { fromSaved, learnFromRound, noteCall, readOf, toSaved } from './learn.ts'
 import type { Notebook } from './learn.ts'
-import { mount, renderGame, showMenu } from './ui.ts'
+import { mount, refreshInstall, renderGame, showMenu } from './ui.ts'
+import { initInstall } from './install.ts'
 import * as portal from './portal.ts'
 import { RIVALS } from './texts.ts'
 import * as voice from './voice.ts'
@@ -137,3 +138,4 @@ mount(document.getElementById('app')!, {
 })
 showMenu(notebook, custom, luck)
 portal.init()
+initInstall(refreshInstall)

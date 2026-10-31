@@ -32,3 +32,9 @@ test('the page links the manifest and the theme color', () => {
   assert.match(html, /<link rel="manifest" href="\.\/manifest\.webmanifest" \/>/)
   assert.match(html, /<meta name="theme-color" content="#1d6b45" \/>/)
 })
+
+test('the service worker only exists for Chrome to offer the install: a pass-through fetch handler that caches nothing', () => {
+  const sw = read('public/sw.js').toString()
+  assert.match(sw, /respondWith\(fetch\(/)
+  assert.doesNotMatch(sw, /caches\./)
+})

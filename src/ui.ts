@@ -7,6 +7,7 @@ import type { AiParams, Rival } from './ai.ts'
 import { BRIGHT, RATE, TRAITS, pointOf, valueAt } from './custom.ts'
 import type { Character } from './custom.ts'
 import { isMuted, preview, toggleMute } from './voice.ts'
+import { canInstall, install } from './install.ts'
 
 export type Handlers = {
   onStart(rival: Rival | Character): void
@@ -39,6 +40,7 @@ export function mount(el: HTMLElement, h: Handlers) {
       case 'start': return h.onStart(target!.dataset.rival as Rival)
       case 'rules': return root.querySelector<HTMLDialogElement>('#rules')!.showModal()
       case 'knows': return root.querySelector<HTMLDialogElement>('#knows')!.showModal()
+      case 'install': return void install().then(refreshInstall)
       case 'custom': return root.querySelector<HTMLDialogElement>('#custom')!.showModal()
       case 'listen': return preview(built().voice)
       case 'play': {
@@ -180,11 +182,17 @@ export function showMenu(known: Notebook, custom: Character, luck: LuckLevel) {
         `<option value="${level}"${level === luck ? ' selected' : ''}>${LUCK_LABEL[level]}</option>`).join('')}</select></label>
       <button data-do="rules">${T.rules}</button>
       <button data-do="knows">${T.knows}</button>
+      <button data-do="install"${canInstall() ? '' : ' hidden'}>${T.install}</button>
       ${muteButton()}
       <dialog id="rules">${RULES_HTML}<form method="dialog"><button>${T.close}</button></form></dialog>
       <dialog id="knows">${knowledgeHtml(known)}<form method="dialog"><button>${T.close}</button></form></dialog>
       ${builderHtml(custom)}
     </main>`
+}
+
+// Chrome says when the game can be installed, at any moment: show or hide the menu's button then
+export function refreshInstall() {
+  root.querySelector('[data-do="install"]')?.toggleAttribute('hidden', !canInstall())
 }
 
 export function renderGame(v: PlayerView, name: string) {
