@@ -131,3 +131,6 @@ dialog::backdrop { background: rgb(0 0 0 / .6); }
 .lobby .qr svg { display: block; width: min(240px, 70vw); height: auto; background: #fff; border-radius: 8px; }
 .lobby .link { color: var(--accent); font-size: 14px; word-break: break-all; }
 .panel button:disabled { opacity: .7; }
+#relay textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; font: 13px ui-monospace, monospace; }
+#relay .relay-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#relay .relay-actions form { margin: 0; }

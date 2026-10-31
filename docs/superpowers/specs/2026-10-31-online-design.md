@@ -14,8 +14,9 @@ recuperan si cualquiera de los dos se corta o recarga.
 ## Fuera de alcance
 
 - Más de dos jugadores, espectadores, chat.
-- Servidor TURN: si los dos están detrás de un NAT simétrico, no conectan. Se agrega solo si las pruebas
-  entre celus lo piden.
+- Ofrecer un servidor TURN: el juego no da ninguno. Si no se encuentran (mismo wifi sin hairpin NAT o con
+  los dispositivos aislados, NATs estrictos), la sala sugiere que uno use datos móviles y deja que cada
+  jugador cargue su propio TURN (ver *TURN propio*).
 - Evitar que el anfitrión vea las cartas del invitado (tiene el `State`). Entre amigos no importa.
 - Que el link abra la app instalada en lugar del navegador.
 
@@ -154,6 +155,22 @@ URL (`history.replaceState`) para no volver a entrar al recargar.
 - Recarga el invitado → su URL conserva `?sala=`: ve su sala, toca Entrar, sigue.
 - Recarga el anfitrión → el menú le ofrece "Seguir el partido con {nombre}" → abre su sala y espera a
   que vuelva la misma clave.
+
+## TURN propio
+
+Si los dos celus no tienen un camino directo, ICE falla y no se encuentran. Las dos salas tienen un
+botón **"¿No se encuentran?"** que abre un diálogo con:
+
+- "Si están en el mismo wifi, es posible que uno necesite usar datos móviles."
+- Links a proveedores con TURN gratis (Metered, Cloudflare) y un campo para pegar lo que dan: JSON (un
+  servidor o una lista) o el fragmento de JavaScript de Metered tal cual. `parseRelays` (`src/turn.ts`)
+  lo reconstruye: solo URLs `turn:`/`turns:`/`stun:`, usuario y contraseña obligatorios para TURN, largos
+  y cantidades acotados, al menos un TURN.
+- Se guarda solo en ese navegador (`truco:turn`); el juego no lo manda a ningún lado ni lo vuelve a
+  mostrar, solo "Usando tu servidor: turn:…". `net.ts` lo pasa a Trystero como `turnConfig`; al guardar,
+  la sala se reconecta.
+
+Probado entre celus en el mismo wifi: con un TURN cargado en los dos lados, conectan.
 
 ## Seguridad
 

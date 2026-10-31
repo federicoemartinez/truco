@@ -7,6 +7,7 @@ import type { Net } from './net.ts'
 import { idOf } from './trust.ts'
 import type { Identity } from './trust.ts'
 import { drop, load, save } from './storage.ts'
+import { savedRelays } from './turn.ts'
 import { renderGame, showGuestLobby, showHostLobby } from './ui.ts'
 import type { Notice } from './ui.ts'
 import { T } from './texts.ts'
@@ -53,7 +54,7 @@ function connect(me: Identity, room: string) {
       if (p === peer) lost()
     },
     message: (p, data) => void (net === n && gate?.receive(p, data)),
-  })
+  }, savedRelays())
   net = n
   const g = createGate(me, myName, n, { verified: (p, h) => (gate === g ? verified(p, h) : undefined), message: (p, m) => void (gate === g && message(p, m)) })
   gate = g
@@ -191,6 +192,13 @@ export function guest(me: Identity, room: string) {
   connect(me, room)
 }
 
+// Joins the same table again from the lobby, so a relay the player just set up is used
+export function reconnect() {
+  if (!myIdentity || started) return
+  if (role === 'host') host(myIdentity)
+  else connect(myIdentity, roomId)
+}
+
 export function action(a: Action) {
   if (!peer || notice) return // nobody to play against right now
   if (role === 'guest') tell({ type: 'action', action: a }, peer)
@@ -213,7 +221,7 @@ export function nextRound() {
 export function quit() {
   const n = net, p = peer
   if (started && role === 'host') drop(MATCH_KEY)
-  net = null; gate = null; peer = null; match = null; seen = null
+  net = null; gate = null; peer = null; match = null; seen = null; myIdentity = null
   if (n && p) void Promise.resolve(n.send({ type: 'bye' }, p)).catch((err) => console.warn(err))
   n?.leave()
 }

@@ -11,6 +11,7 @@ import { RIVALS } from './texts.ts'
 import * as voice from './voice.ts'
 import { load, save } from './storage.ts'
 import * as friend from './friend.ts'
+import { forgetRelays, parseRelays, saveRelays } from './turn.ts'
 import { ID_PATTERN, loadIdentity } from './trust.ts'
 import type { Identity } from './trust.ts'
 
@@ -171,6 +172,17 @@ mount(document.getElementById('app')!, {
     void playFriend(room)
   },
   onName: friend.setName,
+  onRelaySave: (text) => {
+    const relays = parseRelays(text)
+    if (!relays) return false
+    saveRelays(relays)
+    friend.reconnect()
+    return true
+  },
+  onRelayForget: () => {
+    forgetRelays()
+    friend.reconnect()
+  },
 })
 if (invited) showGuestLobby(friend.myName(), 'idle')
 else menu()

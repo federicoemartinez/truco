@@ -57,7 +57,22 @@ export const T = {
   left: (name: string) => `${name} dejó el partido`,
   quit: 'Abandonar',
   someone: 'Tu amigo', // a friend whose name came empty
+  cantFind: '¿No se encuentran?',
+  sameWifi: 'Si están en el mismo wifi, es posible que uno necesite usar datos móviles.',
+  relayIntro: 'Si igual no se encuentran, pueden usar un servidor TURN externo, que pasa los datos cuando no hay camino directo. Algunos dan uno gratis:',
+  relayPaste: 'Pegá acá lo que te da (URLs, usuario y contraseña, en JSON):',
+  relayOnlyHere: 'Se guarda solo en este navegador. Alcanza con que lo configure uno de los dos.',
+  relayUsing: (url: string) => `Usando tu servidor: ${url}`,
+  relayBad: 'Eso no parece la configuración de un servidor TURN.',
+  relaySave: 'Guardar',
+  relayForget: 'Borrar',
 }
+
+// Where to get a free TURN relay of your own: the game offers none
+export const RELAY_PROVIDERS = [
+  { name: 'Metered', url: 'https://www.metered.ca/stun-turn' },
+  { name: 'Cloudflare', url: 'https://developers.cloudflare.com/realtime/turn/' },
+]
 
 // In the menu's order: the easiest to read first
 export const RIVALS: Record<Rival, { name: string; motto: string }> = {

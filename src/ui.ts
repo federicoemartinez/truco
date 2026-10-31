@@ -1,13 +1,14 @@
 import { LUCK_LEVELS, other, sameCard } from './engine.ts'
 import type { Action, GameEvent, LuckLevel, Player, PlayerView, Trick } from './engine.ts'
 import { SPRITE, backSvg, cardSvg } from './cards.ts'
-import { ACTION_LABEL, CALL_LABEL, LUCK_LABEL, RIVALS, RULES_HTML, T, TRAIT_LABEL, cardName, knowledgeHtml, roundSummary, speech } from './texts.ts'
+import { ACTION_LABEL, CALL_LABEL, LUCK_LABEL, RIVALS, RELAY_PROVIDERS, RULES_HTML, T, TRAIT_LABEL, cardName, knowledgeHtml, roundSummary, speech } from './texts.ts'
 import type { Notebook } from './learn.ts'
 import type { AiParams, Rival } from './ai.ts'
 import { BRIGHT, RATE, TRAITS, pointOf, valueAt } from './custom.ts'
 import type { Character } from './custom.ts'
 import { isMuted, preview, toggleMute } from './voice.ts'
 import { canInstall, install } from './install.ts'
+import { savedRelays } from './turn.ts'
 import qrcode from 'qrcode-generator'
 
 export type Handlers = {
@@ -21,6 +22,8 @@ export type Handlers = {
   onResume(): void
   onEnter(name: string): void
   onName(name: string): void
+  onRelaySave(text: string): boolean // false: not a relay's config
+  onRelayForget(): void
 }
 
 // What the table says about a friend: you're waiting for their "next", they dropped, or they left
@@ -54,6 +57,16 @@ export function mount(el: HTMLElement, h: Handlers) {
       case 'resume': return h.onResume()
       case 'enter': return h.onEnter(root.querySelector<HTMLInputElement>('#my-name')!.value)
       case 'share': return void share(root.querySelector<HTMLAnchorElement>('.lobby .link')!.href, target!)
+      case 'relay': return root.querySelector<HTMLDialogElement>('#relay')!.showModal()
+      case 'relay-save': {
+        const field = root.querySelector<HTMLTextAreaElement>('#relay-json')!
+        const ok = h.onRelaySave(field.value)
+        if (ok) field.value = '' // the credentials aren't shown again
+        return showRelayStatus(ok ? null : T.relayBad)
+      }
+      case 'relay-forget':
+        h.onRelayForget()
+        return showRelayStatus(null)
       case 'custom': return root.querySelector<HTMLDialogElement>('#custom')!.showModal()
       case 'listen': return preview(built().voice)
       case 'play': {
@@ -223,6 +236,43 @@ export function refreshInstall() {
 const nameField = (name: string) =>
   `<label class="my-name">${T.yourName} <input id="my-name" maxlength="24" autocomplete="nickname" value="${esc(name)}"></label>`
 
+// When the two phones can't find each other: mobile data first, else the player's own TURN relay.
+// The saved credentials are never shown again, only which server is in use
+const relayInUse = () => savedRelays().flatMap((r) => r.urls).find((url) => /^turns?:/.test(url))
+
+// The dialog's status line: an error, or which relay is in use now. A lobby drawn anew (the host's, after
+// reconnecting) has no dialog left, so there's nothing to update
+function showRelayStatus(error: string | null) {
+  const status = root.querySelector('#relay .relay-status')
+  if (!status) return
+  const using = relayInUse()
+  status.textContent = error ?? (using ? T.relayUsing(using) : '')
+  const line = root.querySelector('.lobby .relay-on')
+  if (line) line.toggleAttribute('hidden', !using)
+  if (line && using) line.textContent = T.relayUsing(using)
+}
+
+function relayHelp(): string {
+  const using = relayInUse()
+  const providers = RELAY_PROVIDERS.map((p) => `<a href="${p.url}" target="_blank" rel="noopener">${p.name}</a>`).join(', ')
+  return `<p class="relay-on"${using ? '' : ' hidden'}>${using ? T.relayUsing(esc(using)) : ''}</p>
+    <button data-do="relay">${T.cantFind}</button>
+    <dialog id="relay">
+      <h2>${T.cantFind}</h2>
+      <p>${T.sameWifi}</p>
+      <p>${T.relayIntro} ${providers}.</p>
+      <label>${T.relayPaste}<textarea id="relay-json" rows="6" spellcheck="false" autocomplete="off"
+        placeholder='{"urls": ["turn:…"], "username": "…", "credential": "…"}'></textarea></label>
+      <p class="relay-status">${using ? T.relayUsing(esc(using)) : ''}</p>
+      <p><small>${T.relayOnlyHere}</small></p>
+      <div class="relay-actions">
+        <button class="primary" data-do="relay-save">${T.relaySave}</button>
+        <button data-do="relay-forget">${T.relayForget}</button>
+        <form method="dialog"><button>${T.close}</button></form>
+      </div>
+    </dialog>`
+}
+
 // Where the host sends the link from: a QR for a friend at the table, Compartir for one far away
 export function showHostLobby(link: string, name: string, waitingFor: string | null) {
   current = null
@@ -239,6 +289,7 @@ export function showHostLobby(link: string, name: string, waitingFor: string | n
       <a class="link" href="${esc(link)}">${esc(link)}</a>
       <button class="primary" data-do="share">${'share' in navigator ? T.share : T.copy}</button>
       <p class="status">${waitingFor ? T.waitingFor(esc(waitingFor)) : T.waitingFriend}</p>
+      ${relayHelp()}
       <button data-do="menu">${T.back}</button>
     </main>`
 }
@@ -255,6 +306,7 @@ export function showGuestLobby(name: string, status: GuestStatus) {
       ${status === 'connecting' ? `<p class="status">${T.connecting}</p>` : ''}
       ${status === 'busy' ? `<p class="status">${T.busy}</p>` : ''}
       ${status === 'unsupported' ? `<p class="status">${T.unsupported}</p>` : ''}
+      ${status === 'unsupported' ? '' : relayHelp()}
       <button data-do="menu">${T.toMenu}</button>
     </main>`
 }
