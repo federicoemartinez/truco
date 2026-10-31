@@ -1,6 +1,7 @@
 import { BET, CALL, ENVIDO_CALLS, RANKS, REASON, SUITS, WIN, legalActions, newMatch, sameAction, startRound } from './engine.ts'
 import type { Action, Card, GameEvent, Pending, Player, PlayerView, Rng, State, Trick } from './engine.ts'
-import { KEY_LENGTH, NONCE_LENGTH, SIG_LENGTH, isB64 } from './trust.ts'
+import { KEY_LENGTH, NONCE_LENGTH, SIG_LENGTH, isB64, newNonce, prove, verify } from './trust.ts'
+import type { Identity } from './trust.ts'
 
 // What the two phones say to each other (see docs/superpowers/specs/2026-10-31-online-design.md)
 export type Msg =
@@ -235,5 +236,64 @@ export function matchFromSaved(raw: string | null): Match | null {
     return { state: o.state, ready: [false, false], guestKey: o.guestKey, guestName: cleanName(o.guestName) }
   } catch {
     return null
+  }
+}
+
+// What the gate needs from the network: net.ts gives the real one, tests wire two fakes together
+export type Link = {
+  send(msg: Msg, peer: string): Promise<void> | void
+  fingerprints(peer: string): { local: string; remote: string } | null
+}
+
+export type Gate = {
+  join(peer: string): Promise<void>
+  leave(peer: string): Promise<void>
+  receive(peer: string, data: unknown): Promise<void>
+}
+
+type Peer = { nonce: string; hello?: Hello; verified: boolean }
+
+// Lets a peer's messages through only once it proved it holds the key it claims, on this very connection.
+// One message at a time, in order: a view sent right after a proof waits until the proof is checked
+export function createGate(me: Identity, name: () => string, link: Link, on: {
+  verified(peer: string, hello: Hello): Promise<void> | void
+  message(peer: string, msg: Msg): void
+}): Gate {
+  const peers = new Map<string, Peer>()
+  let queue = Promise.resolve()
+  const enqueue = (job: () => Promise<void> | void) => (queue = queue.then(job).catch((err) => console.warn(err)))
+
+  // Introduces ourselves to a peer the first time we hear of it
+  const greet = (peer: string): Peer => {
+    let p = peers.get(peer)
+    if (!p) {
+      p = { nonce: newNonce(), verified: false }
+      peers.set(peer, p)
+      void link.send({ type: 'hello', key: me.publicKey, name: name(), nonce: p.nonce }, peer)
+    }
+    return p
+  }
+
+  async function handle(peer: string, data: unknown) {
+    const msg = parseMsg(data)
+    if (!msg) return
+    const p = greet(peer)
+    const fp = link.fingerprints(peer)
+    if (msg.type === 'hello') {
+      if (p.hello || !fp) return // one introduction per connection
+      p.hello = msg
+      await link.send({ type: 'proof', sig: await prove(me, msg.nonce, fp.local, fp.remote) }, peer)
+    } else if (msg.type === 'proof') {
+      if (!p.hello || p.verified || !fp) return
+      if (!(await verify(p.hello.key, msg.sig, p.nonce, fp.local, fp.remote))) return
+      p.verified = true
+      await on.verified(peer, p.hello)
+    } else if (p.verified) on.message(peer, msg)
+  }
+
+  return {
+    join: (peer) => enqueue(() => void greet(peer)),
+    leave: (peer) => enqueue(() => void peers.delete(peer)),
+    receive: (peer, data) => enqueue(() => handle(peer, data)),
   }
 }

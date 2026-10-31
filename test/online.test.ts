@@ -2,9 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { CALL, SUIT, apply, legalActions, newMatch, seededRng, startRound, view } from '../src/engine.ts'
 import type { PlayerView, State, Rng } from '../src/engine.ts'
-import { NAME_MAX, cleanName, parseAction, parseMsg, parseView, markReady, legalMove, matchFromSaved, matchToSaved, newEvents, seat } from '../src/online.ts'
-import type { Match } from '../src/online.ts'
-import { KEY_LENGTH, NONCE_LENGTH } from '../src/trust.ts'
+import { NAME_MAX, cleanName, parseAction, parseMsg, parseView, markReady, legalMove, matchFromSaved, matchToSaved, newEvents, seat, createGate } from '../src/online.ts'
+import type { Match, Gate, Hello, Link, Msg } from '../src/online.ts'
+import { KEY_LENGTH, NONCE_LENGTH, newIdentity } from '../src/trust.ts'
 import { c, setup, play as playCard, FOLD, run } from './helpers.ts'
 
 const json = <T>(x: T): T => JSON.parse(JSON.stringify(x))
@@ -163,4 +163,86 @@ test("the host's saved match comes back, and anything odd is no match", () => {
   assert.equal(matchFromSaved(JSON.stringify({ ...m, guestKey: 'short' })), null)
   assert.equal(matchFromSaved(JSON.stringify({ ...m, state: { ...m.state, phase: 'matchOver' } })), null)
   assert.equal(matchFromSaved(JSON.stringify({ ...m, guestName: 'Ju‮an' }))?.guestName, 'Juan')
+})
+
+// One side of a fake connection: what it sent, and the fingerprints it sees
+function fakeLink(local: string, remote: string) {
+  const out: Msg[] = []
+  const link: Link = { send: (msg) => void out.push(msg), fingerprints: () => ({ local, remote }) }
+  return { out, link }
+}
+
+type Side = { out: Msg[]; gate: Gate }
+
+// Delivers what each side sent to the other, as JSON over the wire, until both go quiet
+async function settle(a: Side, b: Side) {
+  while (a.out.length || b.out.length) {
+    for (const msg of a.out.splice(0)) await b.gate.receive('a', json(msg))
+    for (const msg of b.out.splice(0)) await a.gate.receive('b', json(msg))
+  }
+}
+
+test('two honest phones prove who they are, then talk', async () => {
+  const [host, guest] = await Promise.all([newIdentity(), newIdentity()])
+  const seen: string[] = []
+  const A = fakeLink('fp-a', 'fp-b')
+  const B = fakeLink('fp-b', 'fp-a')
+  const a = { out: A.out, gate: createGate(host, () => 'Fede', A.link, {
+    verified: (_, hello) => void seen.push(`a verified ${hello.name}`),
+    message: (_, msg) => void seen.push(`a got ${msg.type}`),
+  }) }
+  const b = { out: B.out, gate: createGate(guest, () => 'Juan', B.link, {
+    verified: (_, hello) => void seen.push(`b verified ${hello.name} ${hello.key === host.publicKey}`),
+    message: (_, msg) => void seen.push(`b got ${msg.type}`),
+  }) }
+  await a.gate.join('b')
+  await b.gate.join('a')
+  await settle(a, b)
+  B.link.send({ type: 'ready' }, 'a')
+  await settle(a, b)
+  assert.deepEqual(seen.sort(), ['a got ready', 'a verified Juan', 'b verified Fede true'])
+})
+
+test('nothing but the introductions gets through before the proof', async () => {
+  const me = await newIdentity()
+  const got: string[] = []
+  const A = fakeLink('fp-a', 'fp-b')
+  const gate = createGate(me, () => 'Fede', A.link, { verified: () => {}, message: (_, msg) => void got.push(msg.type) })
+  await gate.receive('b', { type: 'ready' })
+  await gate.receive('b', { type: 'action', action: { type: 'fold' } })
+  await gate.receive('b', { type: 'bye' })
+  assert.deepEqual(got, [])
+})
+
+test("a proof relayed from another connection doesn't verify", async () => {
+  const [host, victim, mallory] = await Promise.all([newIdentity(), newIdentity(), newIdentity()])
+  // Mallory has one connection with the victim and another with the real host
+  const V = fakeLink('fp-v', 'fp-m1')
+  const H = fakeLink('fp-h', 'fp-m2')
+  const verified: string[] = []
+  const victimGate = createGate(victim, () => 'Juan', V.link, { verified: (_, hello) => void verified.push(hello.key), message: () => {} })
+  const hostGate = createGate(host, () => 'Fede', H.link, { verified: () => {}, message: () => {} })
+  await victimGate.join('m')
+  const victimHello = V.out.find((msg): msg is Hello => msg.type === 'hello')!
+  // She gets the host to sign the victim's nonce...
+  await hostGate.receive('m', { type: 'hello', key: mallory.publicKey, name: 'M', nonce: victimHello.nonce })
+  const proof = H.out.find((msg) => msg.type === 'proof')!
+  // ...and hands the victim the host's key with that signature
+  await victimGate.receive('m', { type: 'hello', key: host.publicKey, name: 'Fede', nonce: victimHello.nonce })
+  await victimGate.receive('m', json(proof))
+  assert.deepEqual(verified, [])
+})
+
+test('a peer that sends a second introduction keeps the first', async () => {
+  const [host, guest] = await Promise.all([newIdentity(), newIdentity()])
+  const names: string[] = []
+  const A = fakeLink('fp-a', 'fp-b')
+  const B = fakeLink('fp-b', 'fp-a')
+  const a = { out: A.out, gate: createGate(host, () => 'Fede', A.link, { verified: (_, hello) => void names.push(hello.name), message: () => {} }) }
+  const b = { out: B.out, gate: createGate(guest, () => 'Juan', B.link, { verified: () => {}, message: () => {} }) }
+  await a.gate.join('b')
+  await b.gate.join('a')
+  await settle(a, b)
+  await a.gate.receive('b', { type: 'hello', key: guest.publicKey, name: 'Otro', nonce: 'n'.repeat(NONCE_LENGTH) })
+  assert.deepEqual(names, ['Juan'])
 })
