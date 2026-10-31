@@ -96,7 +96,8 @@ type Msg =
 - Sin partida guardada → es el invitado: `newMatch(rng, null)` (sin suerte de dificultad), se guarda su
   clave y su nombre, se le manda la vista.
 - Partida guardada y misma clave → se retoma: se reenvía la vista.
-- Partida guardada y otra clave, o ya hay un invitado conectado → `busy`.
+- Partida guardada y otra clave → `busy`. La misma clave que ya está sentada (una recarga antes de
+  que el anfitrión note el corte) retoma y reemplaza la conexión vieja.
 
 ### Jugadas
 

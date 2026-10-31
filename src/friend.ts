@@ -52,7 +52,8 @@ function connect(me: Identity, room: string) {
     message: (p, data) => void (net === n && gate?.receive(p, data)),
   })
   net = n
-  gate = createGate(me, myName, n, { verified, message })
+  const g = createGate(me, myName, n, { verified: (p, h) => (gate === g ? verified(p, h) : undefined), message: (p, m) => void (gate === g && message(p, m)) })
+  gate = g
 }
 
 function leave() {
@@ -63,8 +64,10 @@ function leave() {
 }
 
 async function verified(p: string, hello: Hello) {
+  const g = gate
   if (role === 'guest') {
     if ((await idOf(hello.key)) !== roomId) return // only the room's owner hosts it
+    if (gate !== g) return // this table was left while the key was checked
     peer = p
     friendName = hello.name || T.someone
     notice = null // back from a drop: the host forgot who said "next", so nobody waits
@@ -76,10 +79,10 @@ async function verified(p: string, hello: Hello) {
       tell({ type: 'busy' }, p)
       return
     case 'new':
-      match = { state: newMatchState(), ready: [false, false], guestKey: hello.key, guestName: hello.name }
+      match = { state: newMatchState(), ready: [false, false], guestKey: hello.key, guestName: hello.name || T.someone }
       break
     case 'resume':
-      match = { ...match!, ready: [false, false], guestName: hello.name }
+      match = { ...match!, ready: [false, false], guestName: hello.name || T.someone }
   }
   peer = p
   friendName = hello.name || T.someone
@@ -102,7 +105,7 @@ function message(p: string, msg: Msg) {
   }
   if (msg.type === 'view') {
     const v = msg.view
-    voice.say(newEvents(seen, v), v.firstPlayer, voiceOf(GUEST))
+    if (seen !== null) voice.say(newEvents(seen, v), v.firstPlayer, voiceOf(GUEST)) // first view after connecting: drawn silently
     if (notice === 'waiting' && (seen?.round !== v.round || seen?.phase !== v.phase)) notice = null
     seen = v
     draw()
@@ -165,7 +168,6 @@ function next(p: Player) {
 
 const newMatchState = () => newMatch(Math.random) // no luck between friends
 
-
 // Opens this phone's own room and waits for the friend (or for the guest of the saved match)
 export function host(me: Identity) {
   role = 'host'
@@ -205,15 +207,9 @@ export function nextRound() {
 // Leaving the table on purpose: tell the friend, and a match left halfway is over. Leaving the lobby
 // before playing keeps a saved match for later
 export async function quit() {
-  if (peer) {
-    try {
-      await net?.send({ type: 'bye' }, peer)
-    } catch (err) {
-      console.warn(err) // still leaving the table either way
-    }
-  }
+  const n = net, p = peer
   if (started && role === 'host') drop(MATCH_KEY)
-  leave()
-  match = null
-  seen = null
+  net = null; gate = null; peer = null; match = null; seen = null
+  if (n && p) await Promise.resolve(n.send({ type: 'bye' }, p)).catch((err) => console.warn(err))
+  n?.leave()
 }

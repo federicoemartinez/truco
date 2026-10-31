@@ -46,13 +46,18 @@ const invited = room !== null && ID_PATTERN.test(room)
 
 const menu = () => showMenu(notebook, custom, luck, friend.savedMatch()?.guestName ?? null)
 
+// Guards against the player going elsewhere (a CPU rival, the menu) while loadIdentity() is pending
+let ticket = 0
+
 // From a tap: the voices unlock now, before waiting for the keys
 async function playFriend(guestOf: string | null) {
   clearTimeout(cpuTimer)
   voice.stop()
   voice.unlock()
-  online = true
+  const t = ++ticket
   const id = await me()
+  if (t !== ticket) return // the player tapped something else meanwhile
+  online = true
   if (guestOf && guestOf !== id.id) friend.guest(id, guestOf)
   else friend.host(id) // our own link opens our own room
 }
@@ -108,6 +113,7 @@ function startMatch() {
 
 mount(document.getElementById('app')!, {
   onStart: (picked) => {
+    ticket++
     voice.unlock()
     peeks = picked === 'arnaldo'
     if (typeof picked === 'string') {
@@ -135,6 +141,7 @@ mount(document.getElementById('app')!, {
   },
   onRematch: () => (online ? friend.nextRound() : startMatch()),
   onMenu: () => {
+    ticket++
     clearTimeout(cpuTimer)
     voice.stop()
     if (online) {
