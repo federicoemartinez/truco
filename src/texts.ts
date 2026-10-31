@@ -9,6 +9,7 @@ export const T = {
   chooseRival: 'Elegí tu rival',
   rules: 'Cómo se juega',
   knows: 'Lo que Bruno sabe de vos',
+  install: 'Instalalo en tu celu',
   close: 'Cerrar',
   you: 'Vos',
   thinking: 'Pensando…',
