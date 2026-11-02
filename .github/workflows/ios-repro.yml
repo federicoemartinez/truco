@@ -1,7 +1,7 @@
 name: iOS repro
 
-# Debug only: runs repro.html in Safari on an iPhone 15 Pro simulator and keeps a screenshot of every step.
-# Two runners for two iOS versions: macos-15 ships iOS 18, macos-26 ships iOS 26.
+# Debug only: runs repro.html in Safari on an iPhone 15 Pro simulator (the newest iOS 26 the runner has)
+# and keeps a screenshot of every step
 on:
   push:
     branches: [debug/ios-cards]
@@ -9,11 +9,7 @@ on:
 
 jobs:
   repro:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, macos-26]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -35,7 +31,10 @@ jobs:
           mkdir -p shots
           npx vite --config repro.vite.config.mjs --port 5199 --strictPort > shots/vite.log 2>&1 &
           until curl -sf http://localhost:5199/repro.html > /dev/null; do sleep 1; done
-          xcrun simctl openurl booted http://localhost:5199/repro.html
+          # Safari's first launch can outlast openurl's timeout: start it first, then retry
+          xcrun simctl launch booted com.apple.mobilesafari
+          sleep 10
+          for i in 1 2 3; do xcrun simctl openurl booted http://localhost:5199/repro.html && break; sleep 10; done
           for i in $(seq 300); do [ -f shots/done ] && break; sleep 2; done
           ls shots
           [ -f shots/done ]
@@ -45,5 +44,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: shots-${{ matrix.os }}
+          name: shots
           path: shots
