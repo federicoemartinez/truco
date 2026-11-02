@@ -1,0 +1,49 @@
+name: iOS repro
+
+# Debug only: runs repro.html in Safari on an iPhone 15 Pro simulator and keeps a screenshot of every step.
+# Two runners for two iOS versions: macos-15 ships iOS 18, macos-26 ships iOS 26.
+on:
+  push:
+    branches: [debug/ios-cards]
+  workflow_dispatch:
+
+jobs:
+  repro:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Boot an iPhone 15 Pro
+        run: |
+          xcrun simctl list runtimes
+          RUNTIME=$(xcrun simctl list runtimes -j | jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | last | .identifier')
+          UDID=$(xcrun simctl create repro "iPhone 15 Pro" "$RUNTIME" || xcrun simctl create repro "iPhone 16 Pro" "$RUNTIME")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID"
+          xcrun simctl status_bar booted override --time 9:41
+      - name: Run repro.html in Safari
+        run: |
+          mkdir -p shots
+          npx vite --config repro.vite.config.mjs --port 5199 --strictPort > shots/vite.log 2>&1 &
+          until curl -sf http://localhost:5199/repro.html > /dev/null; do sleep 1; done
+          xcrun simctl openurl booted http://localhost:5199/repro.html
+          for i in $(seq 300); do [ -f shots/done ] && break; sleep 2; done
+          ls shots
+          [ -f shots/done ]
+      - name: Screenshot of whatever is on screen
+        if: failure()
+        run: xcrun simctl io booted screenshot shots/on-failure.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shots-${{ matrix.os }}
+          path: shots

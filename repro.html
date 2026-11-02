@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- Debug only (branch debug/ios-cards): draws the state where iOS painted the hand out of place, over and over,
+     and asks the harness for a screenshot after each step (POST /shot, with where each card should be) -->
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Truco repro</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module">
+    import './src/main.ts' // mounts the app and the card sprite, as the real page does
+    import { renderGame } from './src/ui.ts'
+    import { newMatch, apply, view } from './src/engine.ts'
+
+    const RIVAL = 'Aristóteles Medio'
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+    const post = (path, body = {}) => fetch(path, { method: 'POST', body: JSON.stringify(body) })
+    const box = (el) => { const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(Math.round) }
+    const shot = (name) => post('/shot', {
+      name, dpr: devicePixelRatio, viewport: [innerWidth, innerHeight],
+      cards: [...document.querySelectorAll('.card-btn')].map(box),
+    })
+
+    // Where the page sits on the screen: a magenta sheet the harness looks for
+    const mark = Object.assign(document.createElement('div'), { style: 'position:fixed;inset:0;background:#f0f;z-index:9' })
+    document.body.append(mark)
+    await wait(500)
+    await shot('calibration')
+    mark.remove()
+
+    // The reported state: the CPU is mano and calls truco before the first card, 700ms+ after the deal
+    async function scene(round) {
+      let s
+      do s = newMatch(Math.random); while (s.turn !== 1)
+      s = { ...s, round } // a new round number, so the cards deal in as they do between rounds
+      renderGame(view(s, 0), RIVAL)
+      await wait(900)
+      s = apply(s, 1, { type: 'call', call: 'truco' })
+      renderGame(view(s, 0), RIVAL)
+      await wait(400)
+      return s
+    }
+
+    const table = () => document.querySelector('.table')
+    const TRIGGERS = {
+      plain: async () => {},
+      sideways: async () => { table().scrollLeft = 2; await wait(300); table().scrollLeft = 0 }, // the scoreboard's 2px overflow
+      rerender: async (s) => { for (let i = 0; i < 3; i++) { renderGame(view(s, 0), RIVAL); await wait(50) } },
+      away: () => post('/away').catch(() => {}), // the harness sends the browser to the background and back
+    }
+
+    let round = 2
+    for (let i = 0; i < 8; i++) {
+      for (const [name, trigger] of Object.entries(TRIGGERS)) {
+        const s = await scene(round++)
+        await trigger(s)
+        await wait(600)
+        await shot(`${String(i).padStart(2, '0')}-${name}`)
+      }
+    }
+    await post('/done')
+  </script>
+</body>
+</html>
