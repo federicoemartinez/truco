@@ -50,6 +50,14 @@
       sideways: async () => { table().scrollLeft = 2; await wait(300); table().scrollLeft = 0 }, // the scoreboard's 2px overflow
       rerender: async (s) => { for (let i = 0; i < 3; i++) { renderGame(view(s, 0), RIVAL); await wait(50) } },
       away: () => post('/away').catch(() => {}), // the harness sends the browser to the background and back
+      // Slack's in-app browser slides in and its bars come and go: 100dvh, and with it --card-w, moves under a drawn hand
+      resize: () => post('/resize').catch(() => {}), // the harness resizes the viewport, where it can
+      cardw: async () => {
+        const html = document.documentElement
+        html.style.setProperty('--card-w', '78px')
+        await wait(300)
+        html.style.removeProperty('--card-w')
+      },
     }
 
     let round = 2

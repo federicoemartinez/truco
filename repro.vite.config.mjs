@@ -18,6 +18,11 @@ const ENDPOINTS = {
     simctl('launch', 'booted', 'com.apple.mobilesafari')
     sleep(1)
   },
+  resize: () => { // rotate and back (⌘→, ⌘←): simctl can't resize Safari; the runner may refuse UI scripting
+    const key = (code) => execFileSync('osascript', ['-e', 'tell application "Simulator" to activate',
+      '-e', `tell application "System Events" to key code ${code} using command down`])
+    try { key(124); sleep(1); key(123); sleep(1) } catch (err) { console.error('resize:', err.message) }
+  },
   done: () => writeFileSync('shots/done', ''),
 }
 
