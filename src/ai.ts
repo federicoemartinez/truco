@@ -102,6 +102,7 @@ function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefine
 const EARLY_TRUCO = 0.25 // how often a truco comes before the singer's first card
 const ENVIDO_LIE = 0.25 // how often Arnaldo sings an envido on poor points, when it can't cost him
 const RAISE_AT_ONCE = 0.35 // how often Arnaldo answers a truco he wins with a raise instead of a quiero
+const TRUCO_LIE = 0.35 // how often Arnaldo sings a truco he loses when the rival feels beaten too
 const beforeFirstCard = (v: PlayerView) => v.tricks.length === 1 && v.tricks[0].cards[v.me] === null
 
 function respondTruco(v: PlayerView, params: AiParams, rng: Rng, read: Read): Action {
@@ -319,7 +320,8 @@ function knowItAll(v: PlayerView, peek: Peek, rng: Rng): Action {
   }
   // Like anyone, he hardly sings before his first card, won or lied, so an early truco gives nothing away
   const now = !beforeFirstCard(v) || rng() < EARLY_TRUCO
-  if (raise && (lastStand(v, v.me) || (now && (winsRound || theyFeelWeak())))) return raise
+  // The lie only now and then: one every time the rival feels beaten would soon be read
+  if (raise && (lastStand(v, v.me) || (now && (winsRound || (rng() < TRUCO_LIE && theyFeelWeak()))))) return raise
 
   // Past the first trick, the card anyone would play if it takes the round too: a second parda kept to
   // win the third with la mejor only works seeing the last card. Else, and in the first trick, where a low

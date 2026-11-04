@@ -256,13 +256,13 @@ test('Arnaldo turns down a truco he is sure to lose, even with two 3s and a 2', 
   }
 })
 
-test('Arnaldo lies in the truco when the human thinks they are losing too', () => {
+test('Arnaldo lies in the truco now and then when the human thinks they are losing too', () => {
   const human = [c(5, SUIT.swords), c(6, SUIT.coins), c(4, SUIT.clubs)]
   const cpu = [c(4, SUIT.cups), c(5, SUIT.cups), c(4, SUIT.coins)] // loses every trick
   const s = run(setup(human, cpu, { envidoDone: true }), [[0, play(c(6, SUIT.coins))], [1, play(c(4, SUIT.cups))], [0, play(c(5, SUIT.swords))]])
-  for (let seed = 1; seed <= 50; seed++) {
-    assert.deepEqual(chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)), call(CALL.truco))
-  }
+  const lies = Array.from({ length: 200 }, (_, seed) => chooseAction(view(s, 1), PROFILES.arnaldo, seededRng(seed), PRIOR_READ, peek(s)))
+    .filter((a) => a.type === 'call').length
+  assert.ok(lies > 40 && lies < 110, `lied ${lies} of 200`)
 })
 
 test('Arnaldo wants an envido he wins on 25 and turns down one he loses on 31', () => {
