@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { CALL, SUIT, apply, newMatch, seededRng, startRound, view } from '../src/engine.ts'
 import { DEFAULT_PARAMS, PRIOR_READ, PROFILES, chooseAction } from '../src/ai.ts'
 import { ACCEPT, DECLINE, FOLD, c, call, play, run, setup } from './helpers.ts'
-import type { State } from '../src/engine.ts'
+import type { Action, Player, State } from '../src/engine.ts'
 
 const WEAK = [c(4, SUIT.swords), c(5, SUIT.clubs), c(6, SUIT.cups)]
 
@@ -128,7 +128,7 @@ test('the AI hardly lies in the truco when its declared envido gives its last ca
 })
 
 test('slowplaying, the AI keeps quiet with a sure hand so the rival sings the truco', () => {
-  const strong = [c(1, SUIT.swords), c(1, SUIT.clubs), c(7, SUIT.swords)]
+  const strong = [c(1, SUIT.clubs), c(7, SUIT.coins), c(7, SUIT.swords)] // only the ancho de espada beats it
   const s = run(setup(WEAK, strong, { envidoDone: true }), [[0, play(c(4, SUIT.swords))], [1, play(c(7, SUIT.swords))]])
   for (let seed = 1; seed <= 50; seed++) {
     assert.deepEqual(chooseAction(view(s, 1), { ...DEFAULT_PARAMS, slowplay: 0 }, seededRng(seed)), call(CALL.truco))
@@ -149,6 +149,29 @@ test('at 1-1, if its last card cannot win the round, the AI goes to the deck ins
     assert.deepEqual(chooseAction(view(losing, 1), DEFAULT_PARAMS, seededRng(seed)), FOLD)
     assert.deepEqual(chooseAction(view(tying, 1), DEFAULT_PARAMS, seededRng(seed)), play(c(3, SUIT.swords)))
   }
+})
+
+test('with the first won, the AI keeps a card nothing beats for the last trick, quiet, and sings before playing it', () => {
+  const human = [c(4, SUIT.swords), c(7, SUIT.cups), c(3, SUIT.cups)]
+  const ancho = c(1, SUIT.swords)
+  const afterFirst = (cpuBest: ReturnType<typeof c>, envido: [Player, Action][] = []) =>
+    run(setup(human, [c(5, SUIT.clubs), c(6, SUIT.coins), cpuBest], { envidoDone: !envido.length }), [
+      [0, play(c(4, SUIT.swords))], ...envido, [1, play(c(5, SUIT.clubs))], // the AI takes the first
+    ])
+  const kept = afterFirst(ancho)
+  const third = run(kept, [[1, play(c(6, SUIT.coins))], [0, play(c(7, SUIT.cups))], [0, play(c(3, SUIT.cups))]])
+  // Unless a lied envido (6 points, turned down) would show: then the ancho closes the round in the second
+  const lied = afterFirst(ancho, [[1, call(CALL.envido)], [0, DECLINE]])
+  const noTruco = { ...afterFirst(c(3, SUIT.coins)), trucoLevel: 1, raiseRights: 0 } as const
+  for (let seed = 1; seed <= 50; seed++) {
+    for (const params of Object.values(PROFILES)) {
+      assert.deepEqual(chooseAction(view(kept, 1), params, seededRng(seed)), play(c(6, SUIT.coins)))
+      assert.deepEqual(chooseAction(view(third, 1), params, seededRng(seed)), call(CALL.truco))
+      assert.deepEqual(chooseAction(view(lied, 1), params, seededRng(seed)), call(CALL.truco))
+    }
+    assert.deepEqual(chooseAction(view(noTruco, 1), DEFAULT_PARAMS, seededRng(seed)), play(c(3, SUIT.coins))) // the bravas beat a 3
+  }
+  assert.deepEqual(chooseAction(view({ ...lied, trucoLevel: 1, raiseRights: 0 }, 1), DEFAULT_PARAMS, seededRng(1)), play(ancho))
 })
 
 // Fresh deals where the human (mano) opens with a truco; how often the AI answers quiero or more

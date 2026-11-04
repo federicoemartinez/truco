@@ -85,6 +85,11 @@ function callTruco(v: PlayerView, params: AiParams, rng: Rng): Action | undefine
   const raise = trucoCall(v)
   if (!raise) return undefined
   if (lastStand(v, v.me)) return raise
+  // Keeping a sure card for the last trick, quiet: let the rival think they can win and sing first
+  if (keepsForLast(v)) return undefined
+  // The card we are about to play takes the round: after it there is no later to sing, nor a rival who would
+  const next = chooseCard(v)
+  if (next.type === 'play' && takesRound(v, next.card)) return raise
   // Hardly anyone sings truco before playing a card: even with a sure hand it pays to wait for the first
   // trick, so only now and then, and never as a bluff
   if (beforeFirstCard(v)) {
@@ -224,7 +229,38 @@ function chooseCard(v: PlayerView): Action {
   }
   if (trickIndex === 0) return play(weakestFirst[Math.floor(weakestFirst.length / 2)])
   // Leading a later trick means we won or tied the first: our best card closes the round
-  return play(weakestFirst[weakestFirst.length - 1])
+  return play(keepsForLast(v) ? weakestFirst[0] : weakestFirst[weakestFirst.length - 1])
+}
+
+// Leading the second having won the first, a card nothing left can beat is kept for the last trick, so the
+// rival thinks they can still win and sings; unless that would show a third card giving away a lied envido
+function keepsForLast(v: PlayerView): boolean {
+  if (v.tricks.length !== 2 || v.tricks[1].cards[other(v.me)] || v.tricks[0].winner !== v.me) return false
+  const best = v.hand.reduce((a, b) => (cardPower(b) > cardPower(a) ? b : a))
+  return unbeatable(v, best) && !envidoLieHidden(v)
+}
+
+const unseen = (v: PlayerView) => {
+  const seen = [...v.hand, ...v.tricks.flatMap((t) => t.cards.filter((c) => c !== null))]
+  return newDeck().filter((c) => !seen.some((s) => sameCard(s, c)))
+}
+
+// No card we haven't seen beats it (one as good ties the last trick, and a tie there goes to whoever won the first)
+const unbeatable = (v: PlayerView, card: Card) => unseen(v).every((c) => cardPower(c) <= cardPower(card))
+
+// Played now, it wins the round whatever card the rival answers with (or already put down)
+function takesRound(v: PlayerView, card: Card): boolean {
+  const results = v.tricks.slice(0, -1).map((t) => t.winner as Player | 'tie')
+  const oppCard = v.tricks[v.tricks.length - 1].cards[other(v.me)]
+  const trick = (theirs: Card) => (v.me === 0 ? trickWinner(card, theirs) : trickWinner(theirs, card))
+  return (oppCard ? [oppCard] : unseen(v)).every((theirs) => roundWinner([...results, trick(theirs)], v.firstPlayer) === v.me)
+}
+
+// We sang envido on poor points and no quiero kept them hidden; all three cards on the table would tell
+function envidoLieHidden(v: PlayerView): boolean {
+  const sang = v.log.some((e) => e.type === 'call' && e.player === v.me && isEnvido(e.call))
+  const declared = v.log.some((e) => e.type === 'envidoPoints' && e.player === v.me)
+  return sang && !declared && envidoPoints(v.dealt) < 27
 }
 
 // Arnaldo Terminador sees the rival's cards: he knows who takes the envido and, both playing their best,
